@@ -9,6 +9,7 @@ from time import sleep
 global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 
+print("Running.")
 
 led = Pin(25, Pin.OUT)
 button = Pin(12, Pin.IN, Pin.PULL_DOWN)
@@ -22,51 +23,62 @@ timer = Timer()
 # https://www.openhacks.com/uploadsproductos/eone-1602a1.pdf
 
 
-
 lcd = LCD()
-string = " Hello!\n"
 lcd.openlight()
-
-#lcd.clear()
+lcd.clear()
 state=1
-print("--------------------------------")
-while True:
-    b = button.value()
-    #print("Button: %d" % (b))
-    if 0 == button.value():
-        led.toggle()
-        lcd.message("hello")
-        if 1 == state:
-            print("CLEAR")
-            lcd.clear()
-            
-        elif 2 == state:
-            lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
-            lcd.clear()
-            lcd.message("display_ctl + on")
-            
-        elif 3 == state:
-            lcd.send_command(LCD_DISPLAYCONTROL )
-           
-            
-        elif 4 == state:
-            lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
-      
-        state = state + 1
-        sleep(1)
 
-        
-        
-    
-print('Setting up Temp')
+
+lcd.message('Setting up Temp')
 ds_pin = machine.Pin(2) 
 ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
  
 roms = ds_sensor.scan()
  
-print('Found DS devices')
-print('Temperature (°C)')
+lcd.message('Found DS devices')
+lcd.message('Temperature (C)')
 
+
+
+
+print("--------------------------------")
+while True:
+    b = button.value()
+    
+    try:
+        ds_sensor.convert_temp()
+        #sleep(1)
+        for rom in roms:
+            lcd.write(0,0, str(ds_sensor.read_temp(rom)))
+        
+        
+        #print("Button: %d" % (b))
+        if 0 == button.value():
+            led.toggle()
+            lcd.message("hello")
+            if 1 == state:
+                print("CLEAR")
+                lcd.clear()
+                
+            elif 2 == state:
+                lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
+                lcd.clear()
+                lcd.message("display_ctl + on")
+                
+            elif 3 == state:
+                lcd.send_command(LCD_DISPLAYCONTROL )
+               
+                
+            elif 4 == state:
+                lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
+          
+            state = state + 1
+            sleep(1)
+    except:
+        print("Not good..")
+        
+        
+    
 
 
 
