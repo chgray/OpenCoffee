@@ -15,36 +15,49 @@ button = Pin(12, Pin.IN, Pin.PULL_DOWN)
 timer = Timer()
 
 # https://docs.sunfounder.com/projects/thales-kit/en/latest/micropython/liquid_crystal_display.html#what-more
-#
+
+# IOExpander
+#https://www.ti.com/lit/ds/symlink/pcf8574.pdf?ts=1627006546204&ref_url=https%253A%252F%252Fwww.google.com%252F
+# LCD
+# https://www.openhacks.com/uploadsproductos/eone-1602a1.pdf
 
 
 
 lcd = LCD()
 string = " Hello!\n"
+lcd.openlight()
 
 #lcd.clear()
-
+state=1
 print("--------------------------------")
 while True:
     b = button.value()
     #print("Button: %d" % (b))
     if 0 == button.value():
-        print("Button")
         led.toggle()
-        #lcd.message("X");
-        lcd.write(1,1,"hi")
-        time.sleep(.25)
+        lcd.message("hello")
+        if 1 == state:
+            print("CLEAR")
+            lcd.clear()
+            
+        elif 2 == state:
+            lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
+            lcd.clear()
+            lcd.message("display_ctl + on")
+            
+        elif 3 == state:
+            lcd.send_command(LCD_DISPLAYCONTROL )
+           
+            
+        elif 4 == state:
+            lcd.send_command(LCD_DISPLAYCONTROL | LCD_DISPLAYON )
+      
+        state = state + 1
+        sleep(1)
+
         
-
-#lcd.message(string)
-#utime.sleep(2)
-#string = "    Sunfounder!"
-#lcd.message(string)
-#utime.sleep(2)
-#lcd.clear()
-
-
-
+        
+    
 print('Setting up Temp')
 ds_pin = machine.Pin(2) 
 ds_sensor = ds18x20.DS18X20(onewire.OneWire(ds_pin))
