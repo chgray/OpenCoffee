@@ -2,6 +2,7 @@ from machine import Pin, Timer
 import time
 import machine, onewire, ds18x20
 from lcd1602 import *
+from PID_lib import *
 
 from time import sleep
 
@@ -18,6 +19,9 @@ print("--------------------------------")
 count = 0
 temp=0.1
 heating=1
+
+# PID
+# https://github.com/gastmaier/micropython-simple-pid
 
 
 def simulate_temp_change(timer):
@@ -36,10 +40,43 @@ def simulate_temp_change(timer):
     elif temp > 300:
         temp = 300
         
-    #print("NT: %f" % (temp))
+    print("NT: %f" % (temp))
 
 
 timer.init(freq=2.5, mode=Timer.PERIODIC, callback=simulate_temp_change)
+
+
+
+
+pid = PID(1, 0.1, 0.05, setpoint=10, scale='s')
+
+pid.output_limits = (0, 1)    # Output value will be between 0 and 10
+pid.set_auto_mode(True, last_output=800.0)
+# Assume we have a system we want to control in controlled_system
+# v = controlled_system.update(0)
+
+while True:
+    # Compute new output from the PID according to the systems current value
+    control = pid(temp)
+    
+    print("Temp: %f  Control: %d" % (temp, control))
+    heating = control
+    
+    sleep(1)
+    
+    # Feed the PID output to the system and get its current value
+    # v = controlled_system.update(control)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
