@@ -23,10 +23,11 @@ heating=1
 # PID
 # https://github.com/gastmaier/micropython-simple-pid
 
+t0= time.ticks_ms()
 
 def simulate_temp_change(timer):
-    #timet = 1
     global temp
+    global t0
     
     if 0 != heating:
         temp = (temp + 0.5)
@@ -39,30 +40,37 @@ def simulate_temp_change(timer):
         temp = 0
     elif temp > 300:
         temp = 300
-        
-    print("NT: %f" % (temp))
+    
+    t= time.ticks_ms() - t0 # t is CPU seconds elapsed (floating point)
+    print("%f, %f" % (t, temp))
 
 
-timer.init(freq=2.5, mode=Timer.PERIODIC, callback=simulate_temp_change)
+timer.init(freq=10, mode=Timer.PERIODIC, callback=simulate_temp_change)
 
 
 
-
-pid = PID(1, 0.1, 0.05, setpoint=10, scale='s')
+# http://brettbeauregard.com/blog/2011/04/improving-the-beginner%e2%80%99s-pid-sample-time/
+pid = PID(1, 0.1, 0.05, setpoint=211, scale='ms')
 
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
-pid.set_auto_mode(True, last_output=800.0)
+pid.set_auto_mode(True, last_output=0)
 # Assume we have a system we want to control in controlled_system
 # v = controlled_system.update(0)
 
 while True:
+    
     # Compute new output from the PID according to the systems current value
     control = pid(temp)
     
-    print("Temp: %f  Control: %d" % (temp, control))
+    #print("Temp: %f  Control: %d" % (temp, control))
     heating = control
     
-    sleep(1)
+    sleep(.1)
+    
+    b = button.value()
+    if 0 == button.value():
+        print("Button")
+        temp = temp - 2
     
     # Feed the PID output to the system and get its current value
     # v = controlled_system.update(control)
