@@ -22,13 +22,28 @@ class WifiLog(object):
     m_connected = False
     m_Exit = False
     
-    def close(self):
+    def close_connection(self):
         self.m_lock.acquire()
-        self.wlan.active(False)
-        m_connected = False
-        m_Exit = True
+        if self.m_connected:
+            print("Closing Socket:")
+            self.m_socket.close()
+        
+        self.m_connected = False
         self.m_lock.release()
     
+    def close(self):
+        machine.reset()
+        self.close_connection()
+        
+        self.m_lock.acquire()
+        if self.m_Exit == False:
+            print("Disconnecting and deactivating wifi")
+            self.wlan.disconnect()
+            self.wlan.active(True)
+        self.m_Exit = True
+        self.m_lock.release()
+        
+        
     def connect_thread(self):
         try:
             while True:
@@ -57,7 +72,8 @@ class WifiLog(object):
                         status = self.wlan.ifconfig()
                         print( 'ip = ' + status[0] )
                     else:
-                        raise RuntimeError('network connection failed')
+                        print('network connection failed')
+                        continue
 
                     addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
 
@@ -96,8 +112,8 @@ class WifiLog(object):
                             self.m_lock.release()
 
                      
-                    print("Closing Listening Socket")
-                    s.close()
+                    print("Received Exit : Closing Listening Socket")
+                    s.close
                     sleep(5)
                 
         except KeyboardInterrupt as e:
@@ -108,19 +124,23 @@ class WifiLog(object):
         self.wlan.active(True)
         
     def log(self, data):
+        disconnect = False
         self.m_lock.acquire()
         if self.m_connected:
             print("C: Log %s" % (data))
             try:
                 self.m_socket.write("Log %s\r\n" % (data))
-            except OSError as e:
-                self.m_socket.close()
-                print('connection closed')
-                self.m_connected = False
+            except:
+                print("Socket Broken");
+                disconnect = True
         else:
             print("D: Log %s" % (data))
             
         self.m_lock.release()
+        
+        
+        if disconnect:
+            self.close_connection()
     
     
 led = Pin(25, Pin.OUT)
@@ -145,14 +165,11 @@ def xyz():
     
 def mno():
     global w
-    sleep(5)
-    w.close()
-    
-    #i = 0
-    #while True:        
-    #    w.log("Boo: %d" % (i))
-    #    i = i + 1
-    #    sleep(2)
+    i = 0
+    while True:        
+        w.log("Boo: %d" % (i))
+        i = i + 1
+        sleep(2)
    
 try:
     _thread.start_new_thread(mno, ())
