@@ -151,7 +151,7 @@ w = WifiLog()
 
 
 
-def xyz():
+def ManageWifi():
     try:
         w.connect_thread()
         print("Wifi Gone")
@@ -163,7 +163,7 @@ def xyz():
         w.close()
         print('Keyboard-Closing Up...')
     
-def mno():
+def RunCoffee():
     global w
     i = 0
     while True:        
@@ -172,8 +172,8 @@ def mno():
         sleep(2)
    
 try:
-    _thread.start_new_thread(mno, ())
-    xyz()
+    _thread.start_new_thread(RunCoffee, ())
+    ManageWifi()
 
 except KeyboardInterrupt as e:
     w.close()
