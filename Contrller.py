@@ -77,8 +77,8 @@ lcd.clear()
 
 # http://brettbeauregard.com/blog/2011/04/improving-the-beginner%e2%80%99s-pid-sample-time/
 goalTemp = 100
-p = 0.06
-i = 0
+p = 0.12
+i = 1
 d = 0
 fileName = "0.1.0.0.csv"
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
