@@ -1,6 +1,6 @@
 from machine import Pin, Timer
 import time
-import machine, onewire, ds18x20
+import machine, onewire, ds18x20, os
 from lcd1602 import *
 from Max6675 import *
 from PID_lib import *
@@ -13,17 +13,28 @@ from time import sleep
 global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 
+
+#https://github.com/miketeachman/micropython-rotary
+
 print("Running.")
 
 #led = Pin(25, Pin.OUT)
 heater = Pin(26, Pin.OUT)
-button = Pin(12, Pin.IN, Pin.PULL_DOWN)
+#button = Pin(12, Pin.IN, Pin.PULL_DOWN)
+button = Pin(0, Pin.IN, Pin.PULL_DOWN)
 timer = Timer()
-  
 
 count = 0
 temp=150
 heating=1
+
+def fileExists(path):
+    try:
+        os.stat(path)
+        return True
+    except OSError:
+            return False
+        
 
 def simulate_temp_change(timer):
     global temp
@@ -46,7 +57,7 @@ def simulate_temp_change(timer):
     print("%f, %f" % (t, temp))
 
 
-#timer.init(freq=10, mode=Timer.PERIODIC, callback=simulate_temp_change)
+
 
 so = Pin(17, Pin.IN)
 sck = Pin(15, Pin.OUT)
@@ -75,98 +86,178 @@ lcd.message('Found DS devices')
 lcd.message('Temperature (C)')
 lcd.clear()
 
+
+from Rotary import Rotary
+import time
+from RotaryIRQ import RotaryIRQ
+
+rotary = RotaryIRQ(pin_num_clk=2, 
+              pin_num_dt=1, 
+              min_val=0, 
+              max_val=110, 
+              reverse=False, 
+              range_mode=RotaryIRQ.RANGE_BOUNDED)
+              
+
+
+#p = 0.16
+fileIndex = 0
+fileName = ("longRun.%d.csv" % fileIndex)
+while fileExists(fileName):
+    #os.remove(fileName)
+    fileIndex = fileIndex + 1
+    fileName = ("longRun.%d.csv" % fileIndex)
+    print("Seeking unique log file %s" % fileName)
+
+print("Found file: %s" % fileName)
+
+f = open(fileName, 'w')
+t_init = time.ticks_ms()
+
+f.write("Time, Time, Temp, Control, Control, P, I, D\r\n")
+  
+
+# 0.2, 0, 2 is pretty good (slow ramp, but holds well)
+
+p = 0.06 #pX / 100
+i = 0
 # http://brettbeauregard.com/blog/2011/04/improving-the-beginner%e2%80%99s-pid-sample-time/
-goalTemp = 100
-p = 0.12
-i = 1
-d = 0
-fileName = "0.1.0.0.csv"
+goalTemp = 105
+#i = 0.1 # most likely half this
+d = 3
+
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
     
-f = open(fileName, 'w')
-
+heater_time = t0
+heaterOn = False
 heater.value(0)
+rotary.set(goalTemp)
 count = 0
 t0 = time.ticks_ms()
+switch_time = t0
 
 
-f.write("Time, Temp, Count, Control, GoalTemp, P, I, D, Measured_P, Measured_I, Measured_D\r\n")
+def toggle_heater(timer):
+    global switch_time
+    global heater
+    delta = switch_time - time.ticks_ms()
+    
+    if delta > 0:
+        print("Delta %d, %d" % (delta, heaterOn))
+        #if heaterOn:
+        #    heater.value(1)
+        #else:
+        #    heater.value(0)
+            
+            
 
+timer.init(freq=10, mode=Timer.PERIODIC, callback=toggle_heater)
+
+        
 try:
-    while True:
+    nextPrintTime = 0
+    tOld = time.ticks_ms()
+    while True :        
+        f.flush()        
         try:
-            b = button.value()
-            #heater.toggle()
-
-            temp = max.read()
-            t = time.ticks_ms() - t0 # t is CPU seconds elapsed (floating point)
+            b = button.value()            
             
-            #temp = (temp * (9/5)) + 32
+            display=False
+            lcdDisplay = False
             
-            # Compute new output from the PID according to the systems current value
-            control = pid(temp)
+            if goalTemp != rotary.value():
+                goalTemp = rotary.value()
+                print("New Set Point : %d" % goalTemp)                
+                lcdDisplay = True
+                
+            pid.setpoint = goalTemp
             
-            duration = control * 2000
+            #sleep(5)
+            #print("Delta %d" % (time.ticks_ms() - tOld))
+            tOld = time.ticks_ms() 
+              
+            #sleep(0.05)
+            if time.ticks_ms() > switch_time:                
+                temp = max.read()
+                t = time.ticks_ms() - t0 # t is CPU seconds elapsed (floating point)
+                t_start = time.ticks_ms() - t_init            
             
-            if duration < 500 and duration != 0:
-                duration = 500
-            sleepTime = 2000 - duration
+                print("Delta : %d (%d)" % (time.ticks_ms() - switch_time, heaterOn))
+            
+                # Compute new output from the PID according to the systems current value
+                control = pid(temp)            
+                duration = control * 2000      
+                                
+                if duration < 250 and duration != 0:
+                    duration = 250
+                sleepTime = 2000 - duration                                                   
+                
+                if heaterOn:
+                    switch_time = time.ticks_ms() + (sleepTime)
+                    if sleepTime != 0:
+                        heater.value(0)                                                 
+                    heaterOn = False
+                else:                    
+                    switch_time = time.ticks_ms() + (duration)
+                    if duration != 0:
+                        heater.value(1)
+                       
+                    heaterOn = True
+                    display = True
                    
-            #heater.value(control)
-            #pm, im, dm = pid.components
+                              
+            if (time.ticks_ms() > nextPrintTime) or display:
+                lcdDisplay = True
+                nextPrintTime = time.ticks_ms() + 2000
+                #print("Duration %d, sleepUntil %d, sleepTime %d, heaterOn %d" % (duration, switch_time, sleepTime, heaterOn))    
+                print("Val, %d, %d, %f, %f, %d, %f, %f, %f" % (t_start, t, temp, control, control, p, i, d))          
+                #f.write("%d, %d, %f, %f, %d, %f, %f, %f\r\n" % (t_start, t, temp, control, control, p, i, d))
+                
+            if lcdDisplay:
+                lcd.clear()
+                lcd.write(0, 0, ('Goal: %d(C), %f' % (goalTemp,control)))
+                lcd.write(0, 1, ("%f" % temp))
+                #print("Next Switch %d" % (switch_time - time.ticks_ms()))
+                #switch_time = time.ticks_ms() + 100000
+                
+            #heater.value(1)
+            #sleep(duration / 1000)
+            #if sleepTime != 0:
+            #    heater.value(0)
+            #    sleep(sleepTime / 1000)
+                
             
-            print(  "Val, %d, %d, %d, %f, %f, %d"     % (t, duration, sleepTime, temp, control,control))
-            f.write("Val, %d, %f, %f, %d, %f, %f, %f\r\n" % (t, temp, control, control, p, i, d))
-            
-            lcd.clear()
-            lcd.write(0, 0, ('%d(C), %f' % (temp, control)))
-            lcd.write(0, 1, ("%dms" % t))
-            
-            
-            heater.value(1)
-            sleep(duration / 1000)
-            if sleepTime != 0:
-                heater.value(0)
-                sleep(sleepTime / 1000)
-             
-            #lcd.write(0, 1, "%d, %d, %d" % (p, i, d))
-            
-            #lcd.write(0,1, str(count))
             count = count + 1
             
             if 0 == button.value():
-                #heater.toggle()
                 goalTemp += 5
                 print("GoalTemp: %d" % goalTemp)
                 pid = PID(p, i, d, setpoint=goalTemp, scale='ms')
                 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
                 pid.set_auto_mode(True, last_output=0)
-
-                #count += 100
                 sleep(.25)
                 
         except OSError:
-            #heater.value(0)
-            #f.write("Crashed")
-            #print(e)
+            heater.value(0)
+            #f.write("Crashed")            
             print("OSError")
-                
-   
+            
+
 except KeyboardInterrupt:
     heater.value(0)
     f.write("Crashed")
     print(e)
     print("Debugger Stopped..")
     
-except Exception as e:
-    heater.value(0)
-    print("CRASHED")
-    #sys.print_exception(e)
-    f.write("Crashed")
-    print("Not good..")
-    
+#except Exception as e:
+#    heater.value(0)
+#    print("CRASHED")
+#    #sys.print_exception(e)
+#    f.write("Crashed")
+#    print("Not good..")
+        
 sleep(.25)
         
         
