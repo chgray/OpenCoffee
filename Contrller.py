@@ -4,6 +4,7 @@ import machine, onewire, ds18x20, os
 from lcd1602 import *
 from Max6675 import *
 from PID_lib import *
+from machine import UART
 
 from time import sleep
 
@@ -20,6 +21,13 @@ global lcd
 
 
 #https://github.com/miketeachman/micropython-rotary
+
+
+uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
+uart.init(bits=8, parity=None, stop=2)
+
+uart.write("BOOTED")
+
 
 print("123_Running.")
 
@@ -106,7 +114,7 @@ rotary = RotaryIRQ(pin_num_clk=2,
 fileIndex = 0
 fileName = ("longRun.%d.csv" % fileIndex)
 while fileExists(fileName):
-    #os.remove(fileName)
+    os.remove(fileName)
     fileIndex = fileIndex + 1
     fileName = ("longRun.%d.csv" % fileIndex)
     print("Seeking unique log file %s" % fileName)
@@ -124,7 +132,7 @@ f.write("Time, Time, Temp, Control, Control, P, I, D\r\n")
 p = 0.3 #pX / 100
 i = 0
 # http://brettbeauregard.com/blog/2011/04/improving-the-beginner%e2%80%99s-pid-sample-time/
-goalTemp = 95.3
+goalTemp = 105.3
 #i = 0.1 # most likely half this
 d = 2
 
@@ -268,6 +276,7 @@ try:
                 nextPrintTime = time.ticks_ms() + 2000
                 print("Val, %d, %d, %d, %f, %f, %f, %f, %f    " % (t - t_start, t, goalTemp, temp, control, p, i, d))          
                 f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+                uart.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
                 
                 
             if updatePID:
@@ -356,7 +365,6 @@ print("BYE")
  
 
 #timer.init(freq=2.5, mode=Timer.PERIODIC, callback=blink)
-
 
 
 

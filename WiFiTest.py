@@ -3,6 +3,7 @@ import socket
 import time
 import ubinascii
 import _thread
+from machine import UART
 from machine import Pin, Timer
 from machine import Pin, Timer
 import time
@@ -12,6 +13,10 @@ import machine, onewire, ds18x20
 
 from time import sleep
 from machine import Pin
+
+
+uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
+uart.init(bits=8, parity=None, stop=2)
 
 
 class WifiLog(object):
@@ -75,7 +80,7 @@ class WifiLog(object):
                         print('network connection failed')
                         continue
 
-                    addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+                    addr = socket.getaddrinfo('0.0.0.0', 22)[0][-1]
 
                     s = socket.socket()
                     s.bind(addr)
@@ -168,6 +173,14 @@ def RunCoffee():
     i = 0
     while True:        
         w.log("Boo: %d" % (i))
+        uart.write("XXXX-YYY %d\n" % (i))
+        
+        if(uart.any()):
+            data = uart.read()
+            w.log(data)
+            print("Got UART")
+            print(data)
+            
         i = i + 1
         sleep(2)
    
