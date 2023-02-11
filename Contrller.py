@@ -18,15 +18,18 @@ from RotaryIRQ import RotaryIRQ
 
 global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
-
-
 #https://github.com/miketeachman/micropython-rotary
 
 
 uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
 uart.init(bits=8, parity=None, stop=2)
 
-uart.write("BOOTED")
+uart.write("Welcome to OpenCoffee\r\n")
+while True:
+    uart.write("BOOTED_X")
+    print("Booted")
+    sleep(1)
+    #machine.restart()
 
 
 print("123_Running.")
@@ -275,8 +278,10 @@ try:
                 lcdDisplay = True
                 nextPrintTime = time.ticks_ms() + 2000
                 print("Val, %d, %d, %d, %f, %f, %f, %f, %f    " % (t - t_start, t, goalTemp, temp, control, p, i, d))          
-                f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
-                uart.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+                #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+                
+                msg = ("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+                uart.write(msg.encode('utf-8'))
                 
                 
             if updatePID:

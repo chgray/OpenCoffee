@@ -18,6 +18,18 @@ from machine import Pin
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
+uart.write("UART: welcome to OpenCoffee")
+#flipper = Pin(4, Pin.OUT)
+#flipper2 = Pin(5, Pin.OUT)
+#flipper.value(1)
+#flipper2.value(0)
+#while True:
+#    uart.write("hi")
+    #flipper.toggle()
+    #flipper2.toggle()
+#    print("hi")
+#    sleep(1)
+    
 
 class WifiLog(object):
     
@@ -37,6 +49,7 @@ class WifiLog(object):
         self.m_lock.release()
     
     def close(self):
+        print("close() - reseting!")
         machine.reset()
         self.close_connection()
         
@@ -53,7 +66,8 @@ class WifiLog(object):
         try:
             while True:
                     print("Hi wifi")
-                    print("Scanning:")
+                    print("Scanning:")                   
+                    #machine.reset()
                     
                     scanlist = self.wlan.scan()
                     print("Got Scanlist")
@@ -132,20 +146,22 @@ class WifiLog(object):
         disconnect = False
         self.m_lock.acquire()
         if self.m_connected:
-            print("C: Log %s" % (data))
+            print(data)
             try:
-                self.m_socket.write("Log %s\r\n" % (data))
+                self.m_socket.write(data)
             except:
                 print("Socket Broken");
                 disconnect = True
         else:
-            print("D: Log %s" % (data))
+            print(data)
             
         self.m_lock.release()
         
         
         if disconnect:
             self.close_connection()
+            print("disconnect() - reseting!")
+            #machine.reset()
     
     
 led = Pin(25, Pin.OUT)
@@ -163,26 +179,37 @@ def ManageWifi():
     except OSError as e:
         w.close()
         print('Closing Up...')
+        print("OSERROR() - reseting!")
+        #machine.reset()
         
     except KeyboardInterrupt as e:
         w.close()
         print('Keyboard-Closing Up...')
+        print("KEYBOARDINTERRUPT() - reseting!")
+        #machine.reset()
     
 def RunCoffee():
     global w
-    i = 0
-    while True:        
-        w.log("Boo: %d" % (i))
-        uart.write("XXXX-YYY %d\n" % (i))
-        
-        if(uart.any()):
-            data = uart.read()
-            w.log(data)
-            print("Got UART")
-            print(data)
-            
-        i = i + 1
-        sleep(2)
+    try:
+        i = 0
+        while True:                
+            if(uart.any()):
+                data = uart.read()
+                #uart.write("hello world")
+                #print("D %d " % len(data))
+                #data_string = data.decode('utf-8')
+                #print("%s" % data)
+                w.log(data)   
+            #print("DTA %s" % (string)data)
+            i = i + 1
+            sleep(2)
+            print("Waiting.")
+            uart.write("tick\r\n")
+    except OSError as e:
+        print("RunCoffee() exception")
+        print(e)
+        #print(e)
+        machine.reset()
    
 try:
     _thread.start_new_thread(RunCoffee, ())
