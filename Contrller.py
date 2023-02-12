@@ -20,16 +20,29 @@ global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 #https://github.com/miketeachman/micropython-rotary
 
+lcd = LCD()
+lcd.openlight()
+lcd.clear()
+#lcd = 0
+def lcd_write(x, y, msg):
+    if 0 != lcd:
+        lcd.write(x,y,msg)
+        
+def lcd_clear():
+    if 0 != lcd:
+        lcd.clear()
+    
+    
 
 uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
 uart.init(bits=8, parity=None, stop=2)
 
 uart.write("Welcome to OpenCoffee\r\n")
-while True:
-    uart.write("BOOTED_X")
-    print("Booted")
-    sleep(1)
-    #machine.restart()
+#while True:
+#    uart.write("BOOTED_X")
+#    print("Booted")
+#    sleep(1)
+#    #machine.restart()
 
 
 print("123_Running.")
@@ -40,6 +53,7 @@ heater = Pin(26, Pin.OUT)
 button = Pin(0, Pin.IN, Pin.PULL_DOWN)
 timer = Timer()
 
+uart.write("heater and buttons setup")
 count = 0
 temp=150
 heating=1
@@ -79,7 +93,7 @@ so = Pin(17, Pin.IN)
 sck = Pin(15, Pin.OUT)
 cs = Pin(16, Pin.OUT)
 max = MAX6675(sck, cs , so)
-
+uart.write("Temp Sensor Setup\r\n")
 
 # https://docs.sunfounder.com/projects/thales-kit/en/latest/micropython/liquid_crystal_display.html#what-more
 
@@ -89,28 +103,15 @@ max = MAX6675(sck, cs , so)
 # https://www.openhacks.com/uploadsproductos/eone-1602a1.pdf
 
 
-lcd = LCD()
-lcd.openlight()
-lcd.clear()
 state=1
-
-
-
-
-lcd.message('Setting up Temp')
-lcd.message('Found DS devices')
-lcd.message('Temperature (C)')
-lcd.clear()
-
-
 
 rotary = RotaryIRQ(pin_num_clk=2, 
               pin_num_dt=1, 
               min_val=0, 
-              max_val=110, 
+              max_val=1100, 
               reverse=False, 
               range_mode=RotaryIRQ.RANGE_BOUNDED)
-              
+uart.write("RotaryIRQ setup\r\n")
 
 
 #p = 0.16
@@ -126,38 +127,38 @@ print("Found file: %s" % fileName)
 
 f = open(fileName, 'w')
 t_init = time.ticks_ms()
-
 f.write("Time, Time, Temp, Control, Control, P, I, D\r\n")
   
-
 # 0.2, 0, 2 is pretty good (slow ramp, but holds well)
 
-p = 0.3 #pX / 100
-i = 0
+
 # http://brettbeauregard.com/blog/2011/04/improving-the-beginner%e2%80%99s-pid-sample-time/
-goalTemp = 105.3
-#i = 0.1 # most likely half this
-d = 2
+if fileExists('PID.config'):
+    with open('PID.config') as configFile:
+        value = configFile.readlines()
+        print("Value: [%s] - %s" % (value, value[0]))
+        bits = value[0].split(",")
+        print(bits[0])
+        print(bits[1])
+        print(bits[2])
+        p = (float)(bits[0]) / 100
+        i = (float)(bits[1]) / 100
+        d = (float)(bits[2]) / 100
+        goalTemp = (float)(bits[3]) / 10
+else:
+    p = 0.1 #pX / 100
+    i = 0
+    d = 1
+    goalTemp = 905
 
-with open('PID.config') as configFile:
-    value = configFile.readlines()
-    print("Value: [%s] - %s" % (value, value[0]))
-    bits = value[0].split(",")
-    print(bits[0])
-    print(bits[1])
-    print(bits[2])
-    p = (float)(bits[0]) / 10
-    i = (float)(bits[1]) / 10
-    d = (float)(bits[2]) / 10
-
-
+print("P=%f, I=%f, D=%f,  goalTemp=%f" % (p,i,d,goalTemp))
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
     
 
 heater.value(0)
-rotary.set(goalTemp)
+rotary.set(goalTemp*10)
 count = 0
 t0 = time.ticks_ms()
 
@@ -224,31 +225,31 @@ try:
             updateConfig = False
             
             if mode == 0:
-                if goalTemp != rotary.value():
-                    goalTemp = rotary.value()
-                    print("New Set Point : %d" % goalTemp)                
+                if goalTemp != rotary.value()/10:
+                    goalTemp = rotary.value()/10
+                    print("New Set Point : %f" % goalTemp)                
                     lcdDisplay = True 
                     updatePID = True
                     updateConfig = True
                     pid.set_auto_mode(True)
             elif mode == 1:
-                if p != rotary.value()/10:
-                    p = rotary.value()/10
+                if p != rotary.value()/100:
+                    p = rotary.value()/100
                     print("New P : %f" % p)                
                     lcdDisplay = True
                     updatePID = True
                     updateConfig = True
             elif mode == 2:
-                if i != rotary.value()/10:
-                    i = rotary.value()/10
-                    print("New I : %d" % i)                
+                if i != rotary.value()/100:
+                    i = rotary.value()/100
+                    print("New I : %f" % i)                
                     lcdDisplay = True
                     updatePID = True
                     updateConfig = True
             elif mode == 3:
-                if d != rotary.value()/10:
-                    d = rotary.value()/10
-                    print("New D : %d" % d)                
+                if d != rotary.value()/100:
+                    d = rotary.value()/100
+                    print("New D : %f" % d)                
                     lcdDisplay = True
                     updatePID = True
                     updateConfig = True
@@ -297,17 +298,17 @@ try:
                 lcdDisplay = True
                             
                 if 0 == mode:                 
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=110, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(goalTemp)
+                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                    rotary.set(goalTemp * 10)
                 if 1 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=40, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(p*10)
+                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                    rotary.set(p * 100)
                 if 2 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=40, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(i * 10)
+                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                    rotary.set(i * 100)
                 if 3 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=40, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(d * 10)
+                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                    rotary.set(d * 100)
                 if 4 == mode:
                     rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                     rotary.set((int)(control*100))
@@ -316,24 +317,25 @@ try:
            
            
             if lcdDisplay:
-                lcd.clear()
+                lcd_clear()
                 if 0 == mode:
-                    lcd.write(0, 0, ('Goal: %d(C), %f' % (goalTemp,control)))
-                    lcd.write(0, 1, ("%f" % temp))    
+                    gt = (float)(goalTemp)
+                    lcd_write(0, 0, ('Goal: %f(C), %f' % (gt,control)))
+                    lcd_write(0, 1, ("%f" % temp))    
                 if 1 == mode:
-                    lcd.write(0, 0, ("P = %f" % (p)))
+                    lcd_write(0, 0, ("P = %f" % (p)))
                 if 2 == mode:
-                    lcd.write(0, 0, ("I = %f" % (i)))
+                    lcd_write(0, 0, ("I = %f" % (i)))
                 if 3 == mode:
-                    lcd.write(0, 0, ("D = %f" % (d)))
+                    lcd_write(0, 0, ("D = %f" % (d)))
                 if 4 == mode:
-                    lcd.write(0, 0, "*MANUAL HEATER*")
-                    lcd.write(0, 1, ("%f %f(C)" % (control, temp)))
+                    lcd_write(0, 0, "*MANUAL HEATER*")
+                    lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
                     
                     
             if updateConfig:
                 with open("PID.config", 'w') as save:
-                    save.write("%d,%d,%d" % (p*10, i*10, d*10))
+                    save.write("%d,%d,%d,%d" % (p*100, i*100, d*100, goalTemp*10))
             count = count + 1
             
 
@@ -363,8 +365,8 @@ sleep(.25)
         
         
     
-lcd.clear()
-lcd.message("BYE")
+lcd_clear()
+lcd_message("BYE")
 heater.value(0)
 print("BYE")
  
