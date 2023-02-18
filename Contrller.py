@@ -149,7 +149,7 @@ else:
     p = 0.1 #pX / 100
     i = 0
     d = 1
-    goalTemp = 905
+    goalTemp = 1044
 
 print("P=%f, I=%f, D=%f,  goalTemp=%f" % (p,i,d,goalTemp))
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
@@ -278,10 +278,10 @@ try:
             if (time.ticks_ms() > nextPrintTime) or display:
                 lcdDisplay = True
                 nextPrintTime = time.ticks_ms() + 2000
-                print("Val, %d, %d, %d, %f, %f, %f, %f, %f    " % (t - t_start, t, goalTemp, temp, control, p, i, d))          
+                print("Val, %d, %d, %f, %f, %f, %f, %f    " % ((t - t_start)/1000, goalTemp, temp, control, p, i, d))          
                 #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
                 
-                msg = ("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+                msg = ("%d, %d, %f, %f, %f, %f, %f\r\n" % ((t - t_start)/1000, goalTemp, temp, control, p, i, d))
                 uart.write(msg.encode('utf-8'))
                 
                 
@@ -351,7 +351,7 @@ except KeyboardInterrupt:
     heater.value(0)
     timer.deinit()
     f.write("Crashed")
-    print(e)
+    #print(e)
     print("Debugger Stopped..")
     
 #except Exception as e:
