@@ -3,12 +3,13 @@ import socket
 import time
 import ubinascii
 import _thread
+
 from machine import UART
 from machine import Pin, Timer
 from machine import Pin, Timer
 import time
 
-import machine, onewire, ds18x20
+import machine, onewire, ds18x20, select
 
 
 from time import sleep
@@ -18,7 +19,7 @@ from machine import Pin
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
-uart.write("UART: welcome to OpenCoffee")
+#uart.write("UART: welcome to OpenCoffee")
 #flipper = Pin(4, Pin.OUT)
 #flipper2 = Pin(5, Pin.OUT)
 #flipper.value(1)
@@ -35,32 +36,30 @@ class WifiLog(object):
     
     m_ssid = 'Hello'
     m_password = 'deadbeef01'
-    m_lock = _thread.allocate_lock()
+   
     m_connected = False
     m_Exit = False
     
     def close_connection(self):
-        self.m_lock.acquire()
+        
         if self.m_connected:
             print("Closing Socket:")
             self.m_socket.close()
         
         self.m_connected = False
-        self.m_lock.release()
-    
+       
     def close(self):
         print("close() - reseting!")
         machine.reset()
         self.close_connection()
         
-        self.m_lock.acquire()
+        
         if self.m_Exit == False:
             print("Disconnecting and deactivating wifi")
             self.wlan.disconnect()
             self.wlan.active(True)
         self.m_Exit = True
-        self.m_lock.release()
-        
+               
         
     def connect_thread(self):
         try:
@@ -105,31 +104,47 @@ class WifiLog(object):
                     # Listen for connections
                     needExit = False
                     while needExit == False:
-                            cl, addr = s.accept()
-                            print('client connected from', addr)
+                            clientSock, addr = s.accept()
+                            print('client connected from', addr)                            
+                            clientSock.send("Welcome to OpenCoffee")
                             
-                            cl.send("Welcome to OpenCoffee")
+                            poller = select.poll()
+                            poller.register(clientSock, select.POLLIN)
                             
-                            self.m_lock.acquire()
-                            self.m_socket = cl
-                            self.m_connected = True
-                            connected = True
-                            self.m_lock.release()
-                            
-                            # Wait for disconnect
-                            while connected:
-                                sleep(1)
-                                self.m_lock.acquire()
-                                connected = self.m_connected
-                                self.m_lock.release()
+                                                     
+                            while True:    
+                                res = poller.poll(100)  # time in milliseconds
                                 
-                            print("Going back for a relisten")
-                            needExit = False;
-                            
-                            self.m_lock.acquire()
-                            needExit = self.m_Exit
-                            self.m_lock.release()
-
+                                if res:                                    
+                                    print('socket got data')
+                                    #toss = clientSock.recv(100)
+                                    #data = toss.decode("utf-8")
+                                    data = clientSock.readline().decode("utf-8").strip()
+                                    
+                                    if data is 'kill':
+                                        print("KILLING!")
+                                        clientSock.write("KILLING!!!")
+                                        os.remove("main.py")
+                                    elif data is 'reboot':
+                                        machine.reset()
+                                    else:
+                                        clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
+                                        
+                        
+                                    print("MSG: %s" % data)
+                                            
+                                if(uart.any()):
+                                    data = uart.read()
+                                    #uart.write("hello world")
+                                    #print("D %d " % len(data))
+                                    #data_string = data.decode('utf-8')
+                                    print(data)
+                                    clientSock.write(data)
+                                #print("DTA %s" % (string)data)                                
+                                #sleep(2)
+                                #print("Waiting.")
+                                uart.write("tick\r\n")
+                                #clientSock.send(".")
                      
                     print("Received Exit : Closing Listening Socket")
                     s.close
@@ -142,27 +157,7 @@ class WifiLog(object):
         self.wlan = network.WLAN(network.STA_IF)
         self.wlan.active(True)
         
-    def log(self, data):
-        disconnect = False
-        self.m_lock.acquire()
-        if self.m_connected:
-            print(data)
-            try:
-                self.m_socket.write(data)
-            except:
-                print("Socket Broken");
-                disconnect = True
-        else:
-            print(data)
-            
-        self.m_lock.release()
-        
-        
-        if disconnect:
-            self.close_connection()
-            print("disconnect() - reseting!")
-            #machine.reset()
-    
+   
     
 led = Pin(25, Pin.OUT)
 
@@ -188,31 +183,8 @@ def ManageWifi():
         print("KEYBOARDINTERRUPT() - reseting!")
         #machine.reset()
     
-def RunCoffee():
-    global w
-    try:
-        i = 0
-        while True:                
-            if(uart.any()):
-                data = uart.read()
-                #uart.write("hello world")
-                #print("D %d " % len(data))
-                #data_string = data.decode('utf-8')
-                #print("%s" % data)
-                w.log(data)   
-            #print("DTA %s" % (string)data)
-            i = i + 1
-            sleep(2)
-            print("Waiting.")
-            uart.write("tick\r\n")
-    except OSError as e:
-        print("RunCoffee() exception")
-        print(e)
-        #print(e)
-        machine.reset()
-   
+
 try:
-    _thread.start_new_thread(RunCoffee, ())
     ManageWifi()
 
 except KeyboardInterrupt as e:
