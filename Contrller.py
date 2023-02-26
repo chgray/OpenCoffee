@@ -14,11 +14,20 @@ from time import sleep
 from Rotary import Rotary
 import time
 from RotaryIRQ import RotaryIRQ
+from machine import ADC
 
 
 global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 #https://github.com/miketeachman/micropython-rotary
+
+pressureADC = ADC(28)
+#while True:
+#        v = pressure.read_u16()
+#        print(v)
+#        sleep(0.25)
+        
+
 
 lcd = LCD()
 lcd.openlight()
@@ -218,7 +227,8 @@ try:
         f.flush()  
         t = time.ticks_ms()      
         try:
-            b = button.value()  
+            b = button.value()
+            pressure = pressureADC.read_u16()
             display=False
             lcdDisplay = False 
             updatePID = False   
@@ -277,11 +287,11 @@ try:
                               
             if (time.ticks_ms() > nextPrintTime) or display:
                 lcdDisplay = True
-                nextPrintTime = time.ticks_ms() + 2000
-                print("Val, %d, %d, %f, %f, %f, %f, %f    " % ((t - t_start)/1000, goalTemp, temp, control, p, i, d))          
+                nextPrintTime = time.ticks_ms() + 500
+                print("Val, %d, %d, %f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))          
                 #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
                 
-                msg = ("%d, %d, %f, %f, %f, %f, %f\r\n" % ((t - t_start)/1000, goalTemp, temp, control, p, i, d))
+                msg = ("%d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))
                 uart.write(msg.encode('utf-8'))
                 
                 
@@ -321,7 +331,7 @@ try:
                 if 0 == mode:
                     gt = (float)(goalTemp)
                     lcd_write(0, 0, ('Goal: %f(C), %f' % (gt,control)))
-                    lcd_write(0, 1, ("%f" % temp))    
+                    lcd_write(0, 1, ("%d, %d" % (temp, pressure)))    
                 if 1 == mode:
                     lcd_write(0, 0, ("P = %f" % (p)))
                 if 2 == mode:

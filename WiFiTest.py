@@ -89,6 +89,7 @@ class WifiLog(object):
                         print('connected')
                         status = self.wlan.ifconfig()
                         print( 'ip = ' + status[0] )
+                        uart.write('ip' + status[0])
                     else:
                         print('network connection failed')
                         continue
@@ -100,13 +101,14 @@ class WifiLog(object):
                     s.listen(1)
 
                     print('listening on', addr)
+                
 
                     # Listen for connections
                     needExit = False
                     while needExit == False:
                             clientSock, addr = s.accept()
                             print('client connected from', addr)                            
-                            clientSock.send("Welcome to OpenCoffee")
+                            clientSock.send("Welcome to OpenCoffee\r\n")
                             
                             poller = select.poll()
                             poller.register(clientSock, select.POLLIN)
@@ -151,7 +153,8 @@ class WifiLog(object):
                     sleep(5)
                 
         except KeyboardInterrupt as e:
-                self.close()
+                print("KEYBOARD INTERUPT!")
+                #self.close()
     
     def __init__(self):
         self.wlan = network.WLAN(network.STA_IF)
