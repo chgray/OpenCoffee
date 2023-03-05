@@ -94,7 +94,7 @@ class WifiLog(object):
                         print('network connection failed')
                         continue
 
-                    addr = socket.getaddrinfo('0.0.0.0', 22)[0][-1]
+                    addr = socket.getaddrinfo('0.0.0.0', 23)[0][-1]
 
                     s = socket.socket()
                     s.bind(addr)
@@ -107,33 +107,42 @@ class WifiLog(object):
                     needExit = False
                     while needExit == False:
                             clientSock, addr = s.accept()
-                            print('client connected from', addr)                            
+                            print('client connected from', addr)
+                            
+                            clientSock.settimeout(5000)                           
                             clientSock.send("Welcome to OpenCoffee\r\n")
+                            
                             
                             poller = select.poll()
                             poller.register(clientSock, select.POLLIN)
                             
-                                                     
+                                 
+                            input = bytearray(0)
+                            
                             while True:    
                                 res = poller.poll(100)  # time in milliseconds
                                 
                                 if res:                                    
                                     print('socket got data')
+                                    
+                                    input += clientSock.recv(100)
+                                    print("line complete")
+                                    
                                     #toss = clientSock.recv(100)
                                     #data = toss.decode("utf-8")
-                                    data = clientSock.readline().decode("utf-8").strip()
+                                    #data = clientSock.readline().decode("utf-8").strip()
                                     
-                                    if data is 'kill':
-                                        print("KILLING!")
-                                        clientSock.write("KILLING!!!")
-                                        os.remove("main.py")
-                                    elif data is 'reboot':
-                                        machine.reset()
-                                    else:
-                                        clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
+                                    #if data is 'kill':
+                                    #    print("KILLING!")
+                                    #    clientSock.write("KILLING!!!")
+                                    #    os.remove("main.py")
+                                    #elif data is 'reboot':
+                                    #    machine.reset()
+                                    #else:
+                                    #    clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
                                         
                         
-                                    print("MSG: %s" % data)
+                                    print("MSG: %s" % input)
                                             
                                 if(uart.any()):
                                     data = uart.read()
