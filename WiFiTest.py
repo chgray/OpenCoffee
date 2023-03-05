@@ -11,26 +11,15 @@ import time
 
 import machine, onewire, ds18x20, select
 
-
 from time import sleep
 from machine import Pin
 
+from machine import WDT
+wdt = WDT(timeout=10000) #timeout is in ms
 
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
-#uart.write("UART: welcome to OpenCoffee")
-#flipper = Pin(4, Pin.OUT)
-#flipper2 = Pin(5, Pin.OUT)
-#flipper.value(1)
-#flipper2.value(0)
-#while True:
-#    uart.write("hi")
-    #flipper.toggle()
-    #flipper2.toggle()
-#    print("hi")
-#    sleep(1)
-    
 
 class WifiLog(object):
     
@@ -83,6 +72,7 @@ class WifiLog(object):
                         print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
                         if self.wlan.status() < 0 or self.wlan.status() >= 3:
                             break
+                        wdt.feed() #resets countdown
                         time.sleep(1)
 
                     if self.wlan.isconnected():
@@ -117,7 +107,7 @@ class WifiLog(object):
                             poller.register(clientSock, select.POLLIN)
                             
                                  
-                            input = bytearray(0)
+                            inputBuffer = bytearray(0)
                             
                             while True:    
                                 res = poller.poll(100)  # time in milliseconds
@@ -125,8 +115,13 @@ class WifiLog(object):
                                 if res:                                    
                                     print('socket got data')
                                     
-                                    input += clientSock.recv(100)
+                                    inputBuffer += clientSock.recv(100)
                                     print("line complete")
+                                    
+                                    #print(inputBuffer)
+                                    #s = inputBuffer.decode("utf-8")
+                                    #print(s)
+                                    #print(input.decode("utf-8").split("\n"))
                                     
                                     #toss = clientSock.recv(100)
                                     #data = toss.decode("utf-8")
@@ -142,7 +137,7 @@ class WifiLog(object):
                                     #    clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
                                         
                         
-                                    print("MSG: %s" % input)
+                                    print(inputBuffer)
                                             
                                 if(uart.any()):
                                     data = uart.read()
