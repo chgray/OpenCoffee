@@ -88,7 +88,7 @@ class WifiLog(object):
                         print('network connection failed')
                         continue
 
-                    addr = socket.getaddrinfo('0.0.0.0', 23)[0][-1]
+                    addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
 
                     s = socket.socket()
                     s.bind(addr)
@@ -103,34 +103,25 @@ class WifiLog(object):
                     # Listen for connections
                     needExit = False
                     while needExit == False:
-                            clientSock, addr = s.accept()
-                            print('client connected from', addr)
                             timer.deinit()
-                            
-                            clientSock.settimeout(5000)                           
-                            clientSock.send("Welcome to OpenCoffee\r\n")
-                            
-                            
+                        
+                            clientSock, addr = s.accept()
                             poller = select.poll()
                             poller.register(clientSock, select.POLLIN)
                             
-                                 
-                            inputBuffer = clientSock.recv(1000)
-                            inputBuffer = bytearray(0)
+                            print('client connected from', addr)
+                                                       
+                            #clientSock.settimeout(5000)                           
+                            clientSock.send("Welcome to OpenCoffee\r\n") 
                             
                             while True:    
                                 res = poller.poll(100)  # time in milliseconds
                                 wdt.feed()
                                 
                                 if res:                                    
-                                    print('socket got data')
-                                    
                                     inputBuffer = clientSock.recv(1000)
-                                    print("line complete")
-                                    
-                                    #print(inputBuffer)
-                                    #s = inputBuffer.decode("utf-8")
-                                    #print(s)
+                                    print('socket got data bytes=%d' % len(inputBuffer))
+                                    #print("line complete")
                                     
                                     commands = inputBuffer.strip().decode('utf-8').split("\n")
                                     for command in commands:                                        
@@ -140,8 +131,11 @@ class WifiLog(object):
                                             os.remove("main.py")
                                         elif command is 'reboot':
                                             machine.reset()
+                                        elif command.startswith("PASS:"):
+                                            clientSock.write("PASSING OFF %s" % command[5:])
+                                            uart.write(command[5:])
                                         else:
-                                            clientSock.write("Unknown command %s, all I know is kill and reboot" % command)
+                                            clientSock.write("Unknown command %s, all I know is kill and reboot\r\n" % command)
                                             
                         
                                     print(inputBuffer)
@@ -151,7 +145,7 @@ class WifiLog(object):
                                     #uart.write("hello world")
                                     #print("D %d " % len(data))
                                     #data_string = data.decode('utf-8')
-                                    print(data)
+                                    print("Serial : %d" % len(data))
                                     clientSock.write(data)
                                 #print("DTA %s" % (string)data)                                
                                 #sleep(2)
