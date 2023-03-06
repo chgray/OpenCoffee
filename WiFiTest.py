@@ -129,6 +129,7 @@ class WifiLog(object):
                                             print("KILLING!")
                                             clientSock.write("KILLING!!!")
                                             os.remove("main.py")
+                                            machine.reboot()
                                         elif command is 'reboot':
                                             machine.reset()
                                         elif command.startswith("PASS:"):
