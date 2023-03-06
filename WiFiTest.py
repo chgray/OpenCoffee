@@ -15,11 +15,15 @@ from time import sleep
 from machine import Pin
 
 from machine import WDT
-wdt = WDT(timeout=10000) #timeout is in ms
+wdt = WDT(timeout=5000) #timeout is in ms
+timer = Timer()
 
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
+def watchDogDisabled(t):
+    #print("Tick");
+    wdt.feed() #resets countdown
 
 class WifiLog(object):
     
@@ -49,6 +53,7 @@ class WifiLog(object):
             self.wlan.active(True)
         self.m_Exit = True
                
+               
         
     def connect_thread(self):
         try:
@@ -64,7 +69,6 @@ class WifiLog(object):
                       print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
 
                     print("Scan Complete")
-                    
                     
                     self.wlan.connect(self.m_ssid, self.m_password)
                     
@@ -92,12 +96,16 @@ class WifiLog(object):
 
                     print('listening on', addr)
                 
+                   
+                    # periodic at 1kHz
+                    timer.init(mode=Timer.PERIODIC, freq=2000, callback=watchDogDisabled)
 
                     # Listen for connections
                     needExit = False
                     while needExit == False:
                             clientSock, addr = s.accept()
                             print('client connected from', addr)
+                            timer.deinit()
                             
                             clientSock.settimeout(5000)                           
                             clientSock.send("Welcome to OpenCoffee\r\n")
@@ -107,35 +115,34 @@ class WifiLog(object):
                             poller.register(clientSock, select.POLLIN)
                             
                                  
+                            inputBuffer = clientSock.recv(1000)
                             inputBuffer = bytearray(0)
                             
                             while True:    
                                 res = poller.poll(100)  # time in milliseconds
+                                wdt.feed()
                                 
                                 if res:                                    
                                     print('socket got data')
                                     
-                                    inputBuffer += clientSock.recv(100)
+                                    inputBuffer = clientSock.recv(1000)
                                     print("line complete")
                                     
                                     #print(inputBuffer)
                                     #s = inputBuffer.decode("utf-8")
                                     #print(s)
-                                    #print(input.decode("utf-8").split("\n"))
                                     
-                                    #toss = clientSock.recv(100)
-                                    #data = toss.decode("utf-8")
-                                    #data = clientSock.readline().decode("utf-8").strip()
-                                    
-                                    #if data is 'kill':
-                                    #    print("KILLING!")
-                                    #    clientSock.write("KILLING!!!")
-                                    #    os.remove("main.py")
-                                    #elif data is 'reboot':
-                                    #    machine.reset()
-                                    #else:
-                                    #    clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
-                                        
+                                    commands = inputBuffer.strip().decode('utf-8').split("\n")
+                                    for command in commands:                                        
+                                        if command is 'kill':
+                                            print("KILLING!")
+                                            clientSock.write("KILLING!!!")
+                                            os.remove("main.py")
+                                        elif command is 'reboot':
+                                            machine.reset()
+                                        else:
+                                            clientSock.write("Unknown command %s, all I know is kill and reboot" % command)
+                                            
                         
                                     print(inputBuffer)
                                             
