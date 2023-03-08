@@ -132,7 +132,7 @@ class WifiLog(object):
                                         elif command is 'reboot':
                                             machine.reset()
                                         elif command.startswith("PASS:"):
-                                            clientSock.write("PASSING OFF %s" % command[5:])
+                                            clientSock.write("PASSING OFF %s\r\n" % command[5:])
                                             uart.write(command[5:])
                                         else:
                                             clientSock.write("Unknown command %s, all I know is kill and reboot\r\n" % command)
@@ -150,7 +150,7 @@ class WifiLog(object):
                                 #print("DTA %s" % (string)data)                                
                                 #sleep(2)
                                 #print("Waiting.")
-                                uart.write("tick\r\n")
+                                #uart.write("tick\r\n")
                                 #clientSock.send(".")
                      
                     print("Received Exit : Closing Listening Socket")
