@@ -28,7 +28,7 @@ pressureADC = ADC(28)
 #        sleep(0.25)
         
 
-
+g_MaxTemp = 130
 lcd = LCD()
 lcd.openlight()
 lcd.clear()
@@ -43,7 +43,7 @@ def lcd_clear():
     
     
 
-uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
+uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9), timeout=1000, timeout_char=1000)
 uart.init(bits=8, parity=None, stop=2)
 
 uart.write("Welcome to OpenCoffee\r\n")
@@ -234,6 +234,44 @@ try:
             updatePID = False   
             updateConfig = False
             
+            if(uart.any()):
+                data = uart.readline().strip().decode('utf-8')
+                
+                if not data.startswith("tick"):
+                    #print("Serial : %d" % len(data))
+                    print("UART GOT : [%s]\r\n" % data)
+                    
+                    commands = data.split("\n")
+                    for command in commands:                                        
+                        if command.startswith("TEMP:"):
+                            mode = 0
+                            goalTemp = float(command[5:])
+                            rotary.set(goalTemp * 10)
+                            
+                        elif command.startswith('kill'):
+                            print("KILLING!")
+                            uart.write("KILLING!!!")
+                            os.remove("main.py")
+                            machine.reset()
+                            
+                        elif command.startswith('reboot'):
+                            uart.write("Rebooting")
+                            machine.reset()
+                            
+                        elif command.startswith("PID:"):
+                            mode = 0
+                            bits = command[4:].split(",")
+                            print(bits[0])
+                            print(bits[1])
+                            print(bits[2])
+                            p = (float)(bits[0])
+                            i = (float)(bits[1])
+                            d = (float)(bits[2])
+                            goalTemp = (float)(bits[3])
+                            rotary.set(goalTemp * 10)
+                                
+                        
+                        
             if mode == 0:
                 if goalTemp != rotary.value()/10:
                     goalTemp = rotary.value()/10
@@ -273,7 +311,15 @@ try:
                     pid.set_auto_mode(False)                 
                                         
             if time.ticks_ms() > switch_time:                
-                temp = max.read()            
+                temp = max.read()
+                if temp > g_MaxTemp:
+                    goalTemp = 0
+                    lcd_clear()
+                    lcd_write(0, 0, ('OVER_TEMP'))
+                    heater.value(0)
+                    timer.deinit()
+                    raise Exception('OVER TEMP')
+                    
                 pid.setpoint = goalTemp    
                 # Compute new output from the PID according to the systems current value
                 
@@ -291,7 +337,7 @@ try:
                 print("Val, %d, %d, %f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))          
                 #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
                 
-                msg = ("%d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))
+                msg = ("STAT,%d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))
                 uart.write(msg.encode('utf-8'))
                 
                 
@@ -355,7 +401,7 @@ try:
             timer.deinit()
             #f.write("Crashed")            
             print("OSError")
-            
+      
 
 except KeyboardInterrupt:
     heater.value(0)
@@ -364,24 +410,25 @@ except KeyboardInterrupt:
     #print(e)
     print("Debugger Stopped..")
     
-#except Exception as e:
-#    heater.value(0)
-#    print("CRASHED")
-#    #sys.print_exception(e)
-#    f.write("Crashed")
-#    print("Not good..")
+except Exception as e:
+    heater.value(0)
+    print("CRASHED")
+    #sys.print_exception(e)
+    f.write("Crashed")
+    print("Not good..")
         
 sleep(.25)
         
         
     
-lcd_clear()
-lcd_message("BYE")
+#lcd_clear()
+#lcd_message("BYE")
 heater.value(0)
 print("BYE")
  
 
 #timer.init(freq=2.5, mode=Timer.PERIODIC, callback=blink)
+
 
 
 
