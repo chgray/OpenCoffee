@@ -56,6 +56,21 @@ uart.write("Welcome to OpenCoffee\r\n")
 
 print("123_Running.")
 
+dimmer_percent = 0
+def SetMotorPercent(percent):
+    global dimmer_percent   
+    v = (int)((percent / 100) * 65536)
+    print("Setting Dimmer : %d, %d" % (percent, v)) 
+    dimmer.duty_u16(v) # duty cycle 50% of 16 bit number
+    dimmer_percent = percent
+    
+
+dimmer = PWM(Pin(18))
+dimmer.freq(1000000)
+dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
+SetMotorPercent(0)
+
+
 #led = Pin(25, Pin.OUT)
 heater = Pin(26, Pin.OUT)
 #button = Pin(12, Pin.IN, Pin.PULL_DOWN)
@@ -308,7 +323,13 @@ try:
                     lcdDisplay = True
                     updatePID = True
                     updateConfig = True   
-                    pid.set_auto_mode(False)                 
+                    pid.set_auto_mode(False)    
+            elif mode == 5:
+                if dimmer_percent != rotary.value():
+                    dimmer_percent = rotary.value()
+                    print("New Pressure Point : %d" % dimmer_percent)                
+                    lcdDisplay = True   
+                    SetMotorPercent(dimmer_percent)       
                                         
             if time.ticks_ms() > switch_time:                
                 temp = max.read()
@@ -349,7 +370,7 @@ try:
                 
             if 0 == button.value():
                 mode = mode + 1
-                if mode > 4:
+                if mode > 5:
                     mode = 0              
                 lcdDisplay = True
                             
@@ -368,6 +389,9 @@ try:
                 if 4 == mode:
                     rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                     rotary.set((int)(control*100))
+                if 5 == mode:
+                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                    rotary.set((int)(dimmer_percent))
                 
                 sleep(.25)                
            
@@ -387,7 +411,9 @@ try:
                 if 4 == mode:
                     lcd_write(0, 0, "*MANUAL HEATER*")
                     lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
-                    
+                if 5 == mode:
+                    lcd_write(0, 0, "*MANUAL PUMP*")
+                    lcd_write(0, 1, ("%d" % (dimmer_percent)))
                     
             if updateConfig:
                 with open("PID.config", 'w') as save:
