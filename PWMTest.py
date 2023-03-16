@@ -43,3 +43,5 @@ sleep(5000)
 
 dimmer_percent = 0
 def SetMotorPercent(percent):
+    
+    7545,  1.46

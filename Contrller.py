@@ -112,6 +112,28 @@ def simulate_temp_change(timer):
 
 
 
+def convertPressure(measure):
+    #0   PSI = 0.5V
+    #100 PSI = 2.5V
+    #200 PSI = 4.5V
+    # 0->3.3V,  with 16 bits of resolution
+    # we have a voltage divider installed (reducing the # 66%) (max voltage going to PI is 1.6V)
+    
+    #print ("M %d" % measure)
+    # figure out the voltage
+    if measure <= 0:
+        measure = 1
+        
+    v = (3.3 / ((65535 / (measure))))
+    
+    # p = 50(v - 0.5)
+    p = (50 * (v - 0.5))
+    
+    #print("m: %d, V: %f, p=%f" % (measure, v, p))
+
+    return ((int)(p))
+    
+
 
 so = Pin(17, Pin.IN)
 sck = Pin(15, Pin.OUT)
@@ -223,7 +245,7 @@ def toggle_heater(timer):
         
         # Turn On Heater
         if duration != 0:
-            print("ON : %d, %d" % (duration, sleepTime))
+            #print("ON : %d, %d" % (duration, sleepTime))
             heater.value(1)
             
     if -1 == heater_off_time:
@@ -243,7 +265,7 @@ try:
         t = time.ticks_ms()      
         try:
             b = button.value()
-            pressure = pressureADC.read_u16()
+            pressure = convertPressure(pressureADC.read_u16())
             display=False
             lcdDisplay = False 
             updatePID = False   
@@ -355,10 +377,10 @@ try:
             if (time.ticks_ms() > nextPrintTime) or display:
                 lcdDisplay = True
                 nextPrintTime = time.ticks_ms() + 500
-                print("Val, %d, %d, %f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))          
+                print("Val,  %d, %d, %d, %f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
                 #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
                 
-                msg = ("STAT,%d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, pressure, temp, control, p, i, d))
+                msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
                 uart.write(msg.encode('utf-8'))
                 
                 
@@ -412,8 +434,8 @@ try:
                     lcd_write(0, 0, "*MANUAL HEATER*")
                     lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
                 if 5 == mode:
-                    lcd_write(0, 0, "*MANUAL PUMP*")
-                    lcd_write(0, 1, ("%d" % (dimmer_percent)))
+                    lcd_write(0, 0, "PUMP : %d" % pressure)
+                    lcd_write(0, 1, ("%d   %d(C)" % (dimmer_percent, (int)(temp))))
                     
             if updateConfig:
                 with open("PID.config", 'w') as save:
@@ -425,7 +447,7 @@ try:
         except OSError:
             heater.value(0)
             timer.deinit()
-            #f.write("Crashed")            
+            f.write("Crashed")            
             print("OSError")
       
 
@@ -451,13 +473,3 @@ sleep(.25)
 #lcd_message("BYE")
 heater.value(0)
 print("BYE")
- 
-
-#timer.init(freq=2.5, mode=Timer.PERIODIC, callback=blink)
-
-
-
-
-
-
-

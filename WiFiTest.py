@@ -15,15 +15,22 @@ from time import sleep
 from machine import Pin
 
 from machine import WDT
-wdt = WDT(timeout=5000) #timeout is in ms
+wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
-def watchDogDisabled(t):
-    #print("Tick");
+def pokeWatchDog():
+    #print("WatchDog Poke")
     wdt.feed() #resets countdown
+
+def pokeWatchDogTimer(t):
+    print("Watchdog Timer")
+    pokeWatchDog()
+
+
+
 
 class WifiLog(object):
     
@@ -60,9 +67,11 @@ class WifiLog(object):
             while True:
                     print("Hi wifi")
                     print("Scanning:")                   
-                    #machine.reset()
                     
+                    
+                    pokeWatchDog()
                     scanlist = self.wlan.scan()
+                    
                     print("Got Scanlist")
                     for result in scanlist:
                       ssid, bssid, channel, RSSI, authmode, hidden = result
@@ -70,13 +79,14 @@ class WifiLog(object):
 
                     print("Scan Complete")
                     
+                    pokeWatchDog()
                     self.wlan.connect(self.m_ssid, self.m_password)
                     
                     while True:
                         print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
                         if self.wlan.status() < 0 or self.wlan.status() >= 3:
                             break
-                        wdt.feed() #resets countdown
+                        pokeWatchDog()
                         time.sleep(1)
 
                     if self.wlan.isconnected():
@@ -90,6 +100,7 @@ class WifiLog(object):
 
                     addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
 
+                    pokeWatchDog()
                     s = socket.socket()
                     s.bind(addr)
                     s.listen(1)
@@ -98,61 +109,60 @@ class WifiLog(object):
                 
                    
                     # periodic at 1kHz
-                    timer.init(mode=Timer.PERIODIC, freq=2000, callback=watchDogDisabled)
-
-                    # Listen for connections
-                    needExit = False
-                    while needExit == False:
-                            timer.deinit()
+                    timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)                
+                    clientSock, addr = s.accept()                    
+                    #timer.deinit()
+                    print('client connected from', addr)
+                    
+                    poller = select.poll()
+                    poller.register(clientSock, select.POLLIN)
+                    
+                    
+                    
+                                                
+                    #clientSock.settimeout(5000)                           
+                    clientSock.send("Welcome to OpenCoffee\r\n") 
+                    
+                    while True:    
+                        res = poller.poll(100)  # time in milliseconds
+                        pokeWatchDog()
                         
-                            clientSock, addr = s.accept()
-                            poller = select.poll()
-                            poller.register(clientSock, select.POLLIN)
+                        if res:                                    
+                            inputBuffer = clientSock.recv(1000)
+                            print('socket got data bytes=%d' % len(inputBuffer))
+                            #print("line complete")
                             
-                            print('client connected from', addr)
-                                                       
-                            #clientSock.settimeout(5000)                           
-                            clientSock.send("Welcome to OpenCoffee\r\n") 
-                            
-                            while True:    
-                                res = poller.poll(100)  # time in milliseconds
-                                wdt.feed()
-                                
-                                if res:                                    
-                                    inputBuffer = clientSock.recv(1000)
-                                    print('socket got data bytes=%d' % len(inputBuffer))
-                                    #print("line complete")
+                            try:
+                                commands = inputBuffer.strip().decode('utf-8').split("\n")
+                                for command in commands:                                        
+                                    if command is 'kill':
+                                        print("KILLING!")
+                                        clientSock.write("KILLING!!!")
+                                        os.remove("main.py")
+                                        machine.reboot()
+                                    elif command is 'reboot':
+                                        machine.reset()
+                                    elif command.startswith("PASS:"):
+                                        clientSock.write("PASSING OFF %s\r\n" % command[5:])
+                                        uart.write(command[5:])
+                                    else:
+                                        clientSock.write("Unknown command %s, all I know is kill and reboot\r\n" % command)
                                     
-                                    commands = inputBuffer.strip().decode('utf-8').split("\n")
-                                    for command in commands:                                        
-                                        if command is 'kill':
-                                            print("KILLING!")
-                                            clientSock.write("KILLING!!!")
-                                            os.remove("main.py")
-                                            machine.reboot()
-                                        elif command is 'reboot':
-                                            machine.reset()
-                                        elif command.startswith("PASS:"):
-                                            clientSock.write("PASSING OFF %s\r\n" % command[5:])
-                                            uart.write(command[5:])
-                                        else:
-                                            clientSock.write("Unknown command %s, all I know is kill and reboot\r\n" % command)
-                                            
-                        
-                                    print(inputBuffer)
-                                            
-                                if(uart.any()):
-                                    data = uart.read()
-                                    #uart.write("hello world")
-                                    #print("D %d " % len(data))
-                                    #data_string = data.decode('utf-8')
-                                    print("Serial : %d" % len(data))
-                                    clientSock.write(data)
-                                #print("DTA %s" % (string)data)                                
-                                #sleep(2)
-                                #print("Waiting.")
-                                #uart.write("tick\r\n")
-                                #clientSock.send(".")
+                            except:
+                                print("Serial Input Error")
+                                    
+                        if(uart.any()):
+                            data = uart.read()
+                            #uart.write("hello world")
+                            #print("D %d " % len(data))
+                            #data_string = data.decode('utf-8')
+                            print("Serial : %d" % len(data))
+                            clientSock.write(data)
+                        #print("DTA %s" % (string)data)                                
+                        #sleep(2)
+                        #print("Waiting.")
+                        #uart.write("tick\r\n")
+                        #clientSock.send(".")
                      
                     print("Received Exit : Closing Listening Socket")
                     s.close
