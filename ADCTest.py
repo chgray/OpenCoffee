@@ -12,22 +12,17 @@ from ads1x15 import ADS1015
 
 print("Booted!")
 
-sda = machine.Pin(20)#, machine.Pin.OUT)
-scl = machine.Pin(21)#, machine.Pin.OUT)
+pressure_sda = machine.Pin(20)#, machine.Pin.OUT)
+pressure_scl = machine.Pin(21)#, machine.Pin.OUT)
 onboard_led = machine.Pin(25, machine.Pin.OUT)
 
 
-pressureI2C = machine.SoftI2C(sda=sda, scl=scl, freq=100000)
-I2C_ADDR = pressureI2C.scan()
-
-print("i2c")
-print(I2C_ADDR)
-
-
+pressureI2C = machine.SoftI2C(sda=pressure_sda, scl=pressure_scl, freq=100000)
 pressure = ADS1015(pressureI2C)
 
 while True:
     value = pressure.read(0)
+    #sleep(1)
     print(value)
 
 

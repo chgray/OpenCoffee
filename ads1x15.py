@@ -136,3 +136,4 @@ class ADS1015(ADS1115):
 
     def alert_read(self):
         return super().alert_read() >> 4
+

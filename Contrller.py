@@ -15,20 +15,28 @@ from Rotary import Rotary
 import time
 from RotaryIRQ import RotaryIRQ
 from machine import ADC
+from ads1x15 import ADS1015
 
 
 global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 #https://github.com/miketeachman/micropython-rotary
 
-pressureADC = ADC(28)
+#pressureADC = ADC(28)
 #while True:
 #        v = pressure.read_u16()
 #        print(v)
-#        sleep(0.25)
-        
+#        sleep(0.25)        
 
 g_MaxTemp = 130
+
+pressure_sda = machine.Pin(20)#, machine.Pin.OUT)
+pressure_scl = machine.Pin(21)#, machine.Pin.OUT)
+pressureI2C = machine.SoftI2C(sda=pressure_sda, scl=pressure_scl, freq=100000)
+pressureSensor = ADS1015(pressureI2C)
+pressureSensor.gain = 0
+
+
 lcd = LCD()
 lcd.openlight()
 lcd.clear()
@@ -69,6 +77,7 @@ dimmer = PWM(Pin(18))
 dimmer.freq(1000000)
 dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
 SetMotorPercent(0)
+
 
 
 #led = Pin(25, Pin.OUT)
@@ -112,26 +121,28 @@ def simulate_temp_change(timer):
 
 
 
-def convertPressure(measure):
-    #0   PSI = 0.5V
-    #100 PSI = 2.5V
-    #200 PSI = 4.5V
-    # 0->3.3V,  with 16 bits of resolution
-    # we have a voltage divider installed (reducing the # 66%) (max voltage going to PI is 1.6V)
+def convertPressure(measure):    
     
-    #print ("M %d" % measure)
-    # figure out the voltage
-    if measure <= 0:
-        measure = 1
-        
-    v = (3.3 / ((65535 / (measure))))
     
-    # p = 50(v - 0.5)
-    p = (50 * (v - 0.5))
+    # 0.5 V is 0
+    # 5.0 V is 5V
+    # Output: 0.5V–4.5V linear voltage output. 0 psi outputs 0.5V, 100 psi outputs 2.5V, 200 psi outputs 4.5V
     
-    #print("m: %d, V: %f, p=%f" % (measure, v, p))
-
-    return ((int)(p))
+    delta = 6.144 / 2048 #6.144 comes from PGA_6_144V (max value for 11 bits)
+    v = measure * delta  
+    
+    print("Pressure : %d" % measure) 
+    print("   Delta : %f" % delta) 
+    print("   V : %f" % v) 
+    
+    p = v - 0.5
+    pDelta = 200 / 4 #from alg above
+    psi = p * pDelta
+    bar = psi * 0.0689475729 
+    
+    #print("Bar: %f" % bar)
+    
+    return bar
     
 
 
@@ -201,10 +212,12 @@ print("P=%f, I=%f, D=%f,  goalTemp=%f" % (p,i,d,goalTemp))
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
-    
+print("PID setup!")   
 
 heater.value(0)
 rotary.set(goalTemp*10)
+print("Rotary Dial setup!")
+
 count = 0
 t0 = time.ticks_ms()
 
@@ -254,7 +267,7 @@ def toggle_heater(timer):
         heater.value(0)
             
 timer.init(freq=100, mode=Timer.PERIODIC, callback=toggle_heater)
-
+print("Heater Toggle timer setup!")
         
 try:
     nextPrintTime = 0
@@ -263,192 +276,199 @@ try:
     while True :        
         f.flush()  
         t = time.ticks_ms()      
-        try:
-            b = button.value()
-            pressure = convertPressure(pressureADC.read_u16())
-            display=False
-            lcdDisplay = False 
-            updatePID = False   
-            updateConfig = False
+        
+        b = button.value()
+                    
+        display=False
+        lcdDisplay = False 
+        updatePID = False   
+        updateConfig = False
+        
+        if(uart.any()):
+            data = uart.readline().strip().decode('utf-8')
+            if not data.startswith("tick"):
+                #print("Serial : %d" % len(data))
+                print("UART GOT : [%s]\r\n" % data)
+                
+                commands = data.split("\n")
+                for command in commands:                                        
+                    if command.startswith("TEMP:"):
+                        mode = 0
+                        goalTemp = float(command[5:])
+                        rotary.set(goalTemp * 10)
+                        
+                    elif command.startswith('kill'):
+                        print("KILLING!")
+                        uart.write("KILLING!!!")
+                        os.remove("main.py")
+                        machine.reset()
+                        
+                    elif command.startswith('reboot'):
+                        uart.write("Rebooting")
+                        machine.reset()
+                        
+                    elif command.startswith("PID:"):
+                        mode = 0
+                        bits = command[4:].split(",")
+                        print(bits[0])
+                        print(bits[1])
+                        print(bits[2])
+                        p = (float)(bits[0])
+                        i = (float)(bits[1])
+                        d = (float)(bits[2])
+                        goalTemp = (float)(bits[3])
+                        rotary.set(goalTemp * 10)
+        
+        #print("UART processing finished")  
+        #print("Mode=%d" % mode)                                       
+        if mode == 0:
+            if goalTemp != rotary.value()/10:
+                goalTemp = rotary.value()/10
+                print("New Set Point : %f" % goalTemp)                
+                lcdDisplay = True 
+                updatePID = True
+                updateConfig = True
+                pid.set_auto_mode(True)
+        elif mode == 1:
+            if p != rotary.value()/100:
+                p = rotary.value()/100
+                print("New P : %f" % p)                
+                lcdDisplay = True
+                updatePID = True
+                updateConfig = True
+        elif mode == 2:
+            if i != rotary.value()/100:
+                i = rotary.value()/100
+                print("New I : %f" % i)                
+                lcdDisplay = True
+                updatePID = True
+                updateConfig = True
+        elif mode == 3:
+            if d != rotary.value()/100:
+                d = rotary.value()/100
+                print("New D : %f" % d)                
+                lcdDisplay = True
+                updatePID = True
+                updateConfig = True
+        elif mode == 4:
+            if control != rotary.value()/100:
+                control = rotary.value()/100
+                print("Manual Control : %f, %d" % (control, rotary.value()))               
+                lcdDisplay = True
+                updatePID = True
+                updateConfig = True   
+                pid.set_auto_mode(False)    
+        elif mode == 5:
+            if dimmer_percent != rotary.value():
+                dimmer_percent = rotary.value()
+                print("New Pressure Point : %d" % dimmer_percent)                
+                lcdDisplay = True   
+                SetMotorPercent(dimmer_percent)       
+           
+           
+        #print("Recalculating")                         
+        if time.ticks_ms() > switch_time:                
+            print("Reading Sensors")
+            temp = max.read()
+            print("...temp=%d" % temp)
             
-            if(uart.any()):
-                data = uart.readline().strip().decode('utf-8')
-                
-                if not data.startswith("tick"):
-                    #print("Serial : %d" % len(data))
-                    print("UART GOT : [%s]\r\n" % data)
-                    
-                    commands = data.split("\n")
-                    for command in commands:                                        
-                        if command.startswith("TEMP:"):
-                            mode = 0
-                            goalTemp = float(command[5:])
-                            rotary.set(goalTemp * 10)
-                            
-                        elif command.startswith('kill'):
-                            print("KILLING!")
-                            uart.write("KILLING!!!")
-                            os.remove("main.py")
-                            machine.reset()
-                            
-                        elif command.startswith('reboot'):
-                            uart.write("Rebooting")
-                            machine.reset()
-                            
-                        elif command.startswith("PID:"):
-                            mode = 0
-                            bits = command[4:].split(",")
-                            print(bits[0])
-                            print(bits[1])
-                            print(bits[2])
-                            p = (float)(bits[0])
-                            i = (float)(bits[1])
-                            d = (float)(bits[2])
-                            goalTemp = (float)(bits[3])
-                            rotary.set(goalTemp * 10)
-                                
-                        
-                        
-            if mode == 0:
-                if goalTemp != rotary.value()/10:
-                    goalTemp = rotary.value()/10
-                    print("New Set Point : %f" % goalTemp)                
-                    lcdDisplay = True 
-                    updatePID = True
-                    updateConfig = True
-                    pid.set_auto_mode(True)
-            elif mode == 1:
-                if p != rotary.value()/100:
-                    p = rotary.value()/100
-                    print("New P : %f" % p)                
-                    lcdDisplay = True
-                    updatePID = True
-                    updateConfig = True
-            elif mode == 2:
-                if i != rotary.value()/100:
-                    i = rotary.value()/100
-                    print("New I : %f" % i)                
-                    lcdDisplay = True
-                    updatePID = True
-                    updateConfig = True
-            elif mode == 3:
-                if d != rotary.value()/100:
-                    d = rotary.value()/100
-                    print("New D : %f" % d)                
-                    lcdDisplay = True
-                    updatePID = True
-                    updateConfig = True
-            elif mode == 4:
-                if control != rotary.value()/100:
-                    control = rotary.value()/100
-                    print("Manual Control : %f, %d" % (control, rotary.value()))               
-                    lcdDisplay = True
-                    updatePID = True
-                    updateConfig = True   
-                    pid.set_auto_mode(False)    
-            elif mode == 5:
-                if dimmer_percent != rotary.value():
-                    dimmer_percent = rotary.value()
-                    print("New Pressure Point : %d" % dimmer_percent)                
-                    lcdDisplay = True   
-                    SetMotorPercent(dimmer_percent)       
-                                        
-            if time.ticks_ms() > switch_time:                
-                temp = max.read()
-                if temp > g_MaxTemp:
-                    goalTemp = 0
-                    lcd_clear()
-                    lcd_write(0, 0, ('OVER_TEMP'))
-                    heater.value(0)
-                    timer.deinit()
-                    raise Exception('OVER TEMP')
-                    
-                pid.setpoint = goalTemp    
-                # Compute new output from the PID according to the systems current value
-                
-                if mode != 4:
-                    control = pid(temp) 
-                else:
-                    control = rotary.value()
-                    
-                switch_time = time.ticks_ms() + 2000
-                #print("Recalculated.")                   
-                              
-            if (time.ticks_ms() > nextPrintTime) or display:
-                lcdDisplay = True
-                nextPrintTime = time.ticks_ms() + 500
-                print("Val,  %d, %d, %d, %f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
-                #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
-                
-                msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
-                uart.write(msg.encode('utf-8'))
-                
-                
-            if updatePID:
-                pid = PID(p, i, d, setpoint=goalTemp, scale='ms')
-                pid.output_limits = (0, 1)    # Output value will be between 0 and 10
-                pid.set_auto_mode(True, last_output=0)
-                print("PID UPDATED")
-                
-            if 0 == button.value():
-                mode = mode + 1
-                if mode > 5:
-                    mode = 0              
-                lcdDisplay = True
-                            
-                if 0 == mode:                 
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(goalTemp * 10)
-                if 1 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(p * 100)
-                if 2 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(i * 100)
-                if 3 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set(d * 100)
-                if 4 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set((int)(control*100))
-                if 5 == mode:
-                    rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                    rotary.set((int)(dimmer_percent))
-                
-                sleep(.25)                
-           
-           
-            if lcdDisplay:
+            pressure = convertPressure(pressureSensor.read(0))
+            print("...pressure=%f" % pressure)
+            
+            if temp > g_MaxTemp:
+                goalTemp = 0
                 lcd_clear()
-                if 0 == mode:
-                    gt = (float)(goalTemp)
-                    lcd_write(0, 0, ('Goal: %f(C), %f' % (gt,control)))
-                    lcd_write(0, 1, ("%d, %d" % (temp, pressure)))    
-                if 1 == mode:
-                    lcd_write(0, 0, ("P = %f" % (p)))
-                if 2 == mode:
-                    lcd_write(0, 0, ("I = %f" % (i)))
-                if 3 == mode:
-                    lcd_write(0, 0, ("D = %f" % (d)))
-                if 4 == mode:
-                    lcd_write(0, 0, "*MANUAL HEATER*")
-                    lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
-                if 5 == mode:
-                    lcd_write(0, 0, "PUMP : %d" % pressure)
-                    lcd_write(0, 1, ("%d   %d(C)" % (dimmer_percent, (int)(temp))))
-                    
-            if updateConfig:
-                with open("PID.config", 'w') as save:
-                    save.write("%d,%d,%d,%d" % (p*100, i*100, d*100, goalTemp*10))
-            count = count + 1
-            
-
+                lcd_write(0, 0, ('OVER_TEMP'))
+                heater.value(0)
+                timer.deinit()
+                raise Exception('OVER TEMP')
                 
-        except OSError:
-            heater.value(0)
-            timer.deinit()
-            f.write("Crashed")            
-            print("OSError")
+            pid.setpoint = goalTemp    
+            # Compute new output from the PID according to the systems current value
+            
+            if mode != 4:
+                control = pid(temp) 
+            else:
+                control = rotary.value()
+                
+            switch_time = time.ticks_ms() + 2000
+            #print("Recalculated.")                   
+               
+                     
+        if (time.ticks_ms() > nextPrintTime) or display:
+            #print("Displaying")
+            lcdDisplay = True
+            nextPrintTime = time.ticks_ms() + 500
+            print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
+            #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
+            
+            msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
+            uart.write(msg.encode('utf-8'))
+            
+        if updatePID:
+            pid = PID(p, i, d, setpoint=goalTemp, scale='ms')
+            pid.output_limits = (0, 1)    # Output value will be between 0 and 10
+            pid.set_auto_mode(True, last_output=0)
+            print("PID UPDATED")
+            
+        if 0 == button.value():
+            mode = mode + 1
+            if mode > 5:
+                mode = 0              
+            lcdDisplay = True
+                        
+            if 0 == mode:                 
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set(goalTemp * 10)
+            if 1 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set(p * 100)
+            if 2 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set(i * 100)
+            if 3 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set(d * 100)
+            if 4 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set((int)(control*100))
+            if 5 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set((int)(dimmer_percent))
+            
+            sleep(.25)                
+        
+    
+        if lcdDisplay:
+            #print("Writing to LCD")
+            lcd_clear()
+            if 0 == mode:
+                gt = (float)(goalTemp)
+                lcd_write(0, 0, ('Goal: %f(C), %f' % (gt,control)))
+                lcd_write(0, 1, ("%d, %d" % (temp, pressure)))    
+            if 1 == mode:
+                lcd_write(0, 0, ("P = %f" % (p)))
+            if 2 == mode:
+                lcd_write(0, 0, ("I = %f" % (i)))
+            if 3 == mode:
+                lcd_write(0, 0, ("D = %f" % (d)))
+            if 4 == mode:
+                lcd_write(0, 0, "*MANUAL HEATER*")
+                lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
+            if 5 == mode:
+                lcd_write(0, 0, "PUMP : %d" % pressure)
+                lcd_write(0, 1, ("%d   %d(C)" % (dimmer_percent, (int)(temp))))
+                
+        if updateConfig:
+            with open("PID.config", 'w') as save:
+                save.write("%d,%d,%d,%d" % (p*100, i*100, d*100, goalTemp*10))
+        count = count + 1
+                        
+        #except OSError:
+        #    heater.value(0)
+        #    timer.deinit()
+        #    f.write("Crashed")            
+        #    print("OSError")
       
 
 except KeyboardInterrupt:
@@ -461,7 +481,7 @@ except KeyboardInterrupt:
 except Exception as e:
     heater.value(0)
     print("CRASHED")
-    #sys.print_exception(e)
+    print(str(e))
     f.write("Crashed")
     print("Not good..")
         
