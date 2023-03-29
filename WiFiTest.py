@@ -15,14 +15,26 @@ from time import sleep
 from machine import Pin
 
 from machine import WDT
+
+
+fixedLed = Pin("LED", Pin.OUT)
 wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
+fixedLed.value(1)
+fixedLed.toggle()
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
 def pokeWatchDog():
-    #print("WatchDog Poke")
+    global wdt
+    global fixedLed
+    
+    #led = Pin("LED", Pin.OUT)
+    fixedLed.value(0)
+    sleep(1)
+    print("WatchDog Poke")
+    fixedLed.value(1)
     wdt.feed() #resets countdown
 
 def pokeWatchDogTimer(t):
@@ -180,7 +192,7 @@ class WifiLog(object):
 
 
 
-led = Pin(25, Pin.OUT)
+
 
 w = WifiLog()
 #w.log("hi")
