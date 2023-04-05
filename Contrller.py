@@ -30,6 +30,9 @@ global lcd
 
 g_MaxTemp = 130
 
+groupheadSolenoid = cs = machine.Pin(13, Pin.OUT)
+
+
 pressure_sda = machine.Pin(20)#, machine.Pin.OUT)
 pressure_scl = machine.Pin(21)#, machine.Pin.OUT)
 pressureI2C = machine.SoftI2C(sda=pressure_sda, scl=pressure_scl, freq=100000)
@@ -74,10 +77,13 @@ def SetMotorPercent(percent):
     
 
 dimmer = PWM(Pin(18))
-dimmer.freq(1000000)
-dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
-SetMotorPercent(0)
+dimmer.freq(60) #1000000)
 
+#https://www.amazon.com/gp/product/B06Y1DT1WP/ref=ppx_yo_dt_b_asin_title_o02_s00?ie=UTF8&psc=1
+#50Hz or 60Hz PWM input signal up to 10kHz Input voltage level up to VCC (0-3.3V / 0-5V) 50HZ LED
+dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
+#SetMotorPercent(0)
+SetMotorPercent(0)
 
 
 #led = Pin(25, Pin.OUT)
@@ -121,27 +127,20 @@ def simulate_temp_change(timer):
 
 
 
-def convertPressure(measure):    
-    
-    
+def convertPressure(measure):  
     # 0.5 V is 0
     # 5.0 V is 5V
     # Output: 0.5V–4.5V linear voltage output. 0 psi outputs 0.5V, 100 psi outputs 2.5V, 200 psi outputs 4.5V
     
     delta = 6.144 / 2048 #6.144 comes from PGA_6_144V (max value for 11 bits)
-    v = measure * delta  
-    
-    print("Pressure : %d" % measure) 
-    print("   Delta : %f" % delta) 
-    print("   V : %f" % v) 
-    
+    v = measure * delta      
+    #print("Pressure : %d" % measure) 
+    #print("   Delta : %f" % delta) 
+    #print("   V : %f" % v)     
     p = v - 0.5
     pDelta = 200 / 4 #from alg above
     psi = p * pDelta
-    bar = psi * 0.0689475729 
-    
-    #print("Bar: %f" % bar)
-    
+    bar = psi * 0.0689475729     
     return bar
     
 
@@ -212,7 +211,13 @@ print("P=%f, I=%f, D=%f,  goalTemp=%f" % (p,i,d,goalTemp))
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
-print("PID setup!")   
+print("PID setup!")  
+
+pressurePid = PID(250, 0, 0, setpoint=9, scale='ms')
+pressurePid.output_limits = (60, 100)    # Output value will be between 0 and 10
+pressurePid.set_auto_mode(True, last_output=0)
+print("Pressure PID setup!")   
+ 
 
 heater.value(0)
 rotary.set(goalTemp*10)
@@ -273,11 +278,19 @@ try:
     nextPrintTime = 0
     t_start = time.ticks_ms()
     mode = 0
+    
+    
     while True :        
         f.flush()  
-        t = time.ticks_ms()      
-        
+        t = time.ticks_ms() 
         b = button.value()
+        
+        # while True:
+        pressure = convertPressure(pressureSensor.read(0))
+        dimmer_percent = pressurePid(pressure)
+        print("Pressure: %f,   Dimmer: %d, Goal: %d" % (pressure, dimmer_percent, pressurePid.setpoint))
+        SetMotorPercent(dimmer_percent)    
+    
                     
         display=False
         lcdDisplay = False 
@@ -328,7 +341,9 @@ try:
                 lcdDisplay = True 
                 updatePID = True
                 updateConfig = True
-                pid.set_auto_mode(True)
+                pid.set_auto_mode(True)                
+            if pressurePid.setpoint != 9:
+                pressurePid.setpoint = 9
         elif mode == 1:
             if p != rotary.value()/100:
                 p = rotary.value()/100
@@ -364,7 +379,11 @@ try:
                 print("New Pressure Point : %d" % dimmer_percent)                
                 lcdDisplay = True   
                 SetMotorPercent(dimmer_percent)       
-           
+        elif mode == 6:
+            lcdDisplay = True  
+            updatePID = True  
+            if pressurePid.setpoint != 1:
+                pressurePid.setpoint = 1
            
         #print("Recalculating")                         
         if time.ticks_ms() > switch_time:                
@@ -380,6 +399,7 @@ try:
                 lcd_clear()
                 lcd_write(0, 0, ('OVER_TEMP'))
                 heater.value(0)
+                SetMotorPercent(0)
                 timer.deinit()
                 raise Exception('OVER TEMP')
                 
@@ -398,7 +418,7 @@ try:
         if (time.ticks_ms() > nextPrintTime) or display:
             #print("Displaying")
             lcdDisplay = True
-            nextPrintTime = time.ticks_ms() + 500
+            nextPrintTime = time.ticks_ms() + 250
             print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
             #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
             
@@ -413,39 +433,53 @@ try:
             
         if 0 == button.value():
             mode = mode + 1
-            if mode > 5:
+            if mode > 6:
                 mode = 0              
             lcdDisplay = True
                         
-            if 0 == mode:                 
+            if 0 == mode:                
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set(goalTemp * 10)
+                rotary.set(goalTemp * 10)                
+                groupheadSolenoid.value(1)   
             if 1 == mode:
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                 rotary.set(p * 100)
+                mode = 6                
+                groupheadSolenoid.value(0)   
             if 2 == mode:
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                 rotary.set(i * 100)
+                mode = 6               
+                groupheadSolenoid.value(0)   
             if 3 == mode:
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                 rotary.set(d * 100)
+                mode = 6
+                groupheadSolenoid.value(0)
             if 4 == mode:
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                 rotary.set((int)(control*100))
+                mode = 6
+                groupheadSolenoid.value(0)
             if 5 == mode:
                 rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
                 rotary.set((int)(dimmer_percent))
-            
+                mode = 6
+                groupheadSolenoid.value(0)
+            if 6 == mode:
+                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+                rotary.set((int)(dimmer_percent))
+                groupheadSolenoid.value(1)
             sleep(.25)                
         
-    
+        
         if lcdDisplay:
             #print("Writing to LCD")
             lcd_clear()
             if 0 == mode:
                 gt = (float)(goalTemp)
-                lcd_write(0, 0, ('Goal: %f(C), %f' % (gt,control)))
-                lcd_write(0, 1, ("%d, %d" % (temp, pressure)))    
+                lcd_write(0, 0, ('Pull: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 1, ("%d   %d(C)" % (pressurePid.setpoint, (int)(temp))))    
             if 1 == mode:
                 lcd_write(0, 0, ("P = %f" % (p)))
             if 2 == mode:
@@ -458,6 +492,9 @@ try:
             if 5 == mode:
                 lcd_write(0, 0, "PUMP : %d" % pressure)
                 lcd_write(0, 1, ("%d   %d(C)" % (dimmer_percent, (int)(temp))))
+            if 6 == mode:
+                lcd_write(0, 0, ('PreInfuse: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 1, ("%d   %d(C)" % (pressurePid.setpoint, (int)(temp))))                
                 
         if updateConfig:
             with open("PID.config", 'w') as save:
@@ -466,6 +503,7 @@ try:
                         
         #except OSError:
         #    heater.value(0)
+        #    SetMotorPercent(0)
         #    timer.deinit()
         #    f.write("Crashed")            
         #    print("OSError")
@@ -473,6 +511,7 @@ try:
 
 except KeyboardInterrupt:
     heater.value(0)
+    SetMotorPercent(0)
     timer.deinit()
     f.write("Crashed")
     #print(e)
@@ -480,11 +519,13 @@ except KeyboardInterrupt:
     
 except Exception as e:
     heater.value(0)
+    SetMotorPercent(0)
     print("CRASHED")
     print(str(e))
     f.write("Crashed")
     print("Not good..")
-        
+
+       
 sleep(.25)
         
         
@@ -492,4 +533,5 @@ sleep(.25)
 #lcd_clear()
 #lcd_message("BYE")
 heater.value(0)
+SetMotorPercent(0)
 print("BYE")
