@@ -145,12 +145,11 @@ uart.write("Temp Sensor Setup\r\n")
 
 
 state=1
-
 rotary = RotaryIRQ(pin_num_clk=2, 
               pin_num_dt=1, 
               min_val=0, 
-              max_val=1100, 
-              reverse=False, 
+              max_val=4, 
+              reverse=True, 
               range_mode=RotaryIRQ.RANGE_BOUNDED)
 uart.write("RotaryIRQ setup\r\n")
 
@@ -271,12 +270,14 @@ try:
         print("Pressure: %f,   Dimmer: %d, Goal: %d" % (pressure, dimmer_percent, pressurePid.setpoint))
         SetMotorPercent(dimmer_percent)    
     
-                    
         display=False
         lcdDisplay = False 
         updatePID = False   
         updateConfig = False
         
+        #
+        # Process UART
+        #
         if(uart.any()):
             data = uart.readline().strip().decode('utf-8')
             if not data.startswith("tick"):
@@ -312,59 +313,67 @@ try:
                         goalTemp = (float)(bits[3])
                         rotary.set(goalTemp * 10)
         
-                                      
-        if mode == 0:
-            if goalTemp != rotary.value()/10:
-                goalTemp = rotary.value()/10
-                print("New Set Point : %f" % goalTemp)                
-                lcdDisplay = True 
-                updatePID = True
-                updateConfig = True
-                pid.set_auto_mode(True)                
-            if pressurePid.setpoint != 9:
-                pressurePid.setpoint = 9
-        elif mode == 1:
-            if p != rotary.value()/100:
-                p = rotary.value()/100
-                print("New P : %f" % p)                
-                lcdDisplay = True
-                updatePID = True
-                updateConfig = True
-        elif mode == 2:
-            if i != rotary.value()/100:
-                i = rotary.value()/100
-                print("New I : %f" % i)                
-                lcdDisplay = True
-                updatePID = True
-                updateConfig = True
-        elif mode == 3:
-            if d != rotary.value()/100:
-                d = rotary.value()/100
-                print("New D : %f" % d)                
-                lcdDisplay = True
-                updatePID = True
-                updateConfig = True
-        elif mode == 4:
-            if control != rotary.value()/100:
-                control = rotary.value()/100
-                print("Manual Control : %f, %d" % (control, rotary.value()))               
-                lcdDisplay = True
-                updatePID = True
-                updateConfig = True   
-                pid.set_auto_mode(False)    
-        elif mode == 5:
-            if dimmer_percent != rotary.value():
-                dimmer_percent = rotary.value()
-                print("New Pressure Point : %d" % dimmer_percent)                
-                lcdDisplay = True   
-                SetMotorPercent(dimmer_percent)       
-        elif mode == 6:
-            lcdDisplay = True  
-            updatePID = True  
-            if pressurePid.setpoint != 1:
-                pressurePid.setpoint = 1
+        # Change modes
+        if mode != rotary.value():
+            mode = rotary.value()
+            print("MODE: %d" % (mode))
+        
+         
+        # if mode == 0:
+        #     if goalTemp != rotary.value()/10:
+        #         goalTemp = rotary.value()/10
+        #         print("New Set Point : %f" % goalTemp)                
+        #         lcdDisplay = True 
+        #         updatePID = True
+        #         updateConfig = True
+        #         pid.set_auto_mode(True)                
+        #     if pressurePid.setpoint != 9:
+        #         pressurePid.setpoint = 9
+        # elif mode == 1:
+        #     if p != rotary.value()/100:
+        #         p = rotary.value()/100
+        #         print("New P : %f" % p)                
+        #         lcdDisplay = True
+        #         updatePID = True
+        #         updateConfig = True
+        # elif mode == 2:
+        #     if i != rotary.value()/100:
+        #         i = rotary.value()/100
+        #         print("New I : %f" % i)                
+        #         lcdDisplay = True
+        #         updatePID = True
+        #         updateConfig = True
+        # elif mode == 3:
+        #     if d != rotary.value()/100:
+        #         d = rotary.value()/100
+        #         print("New D : %f" % d)                
+        #         lcdDisplay = True
+        #         updatePID = True
+        #         updateConfig = True
+        # elif mode == 4:
+        #     if control != rotary.value()/100:
+        #         control = rotary.value()/100
+        #         print("Manual Control : %f, %d" % (control, rotary.value()))               
+        #         lcdDisplay = True
+        #         updatePID = True
+        #         updateConfig = True   
+        #         pid.set_auto_mode(False)    
+        # elif mode == 5:
+        #     if dimmer_percent != rotary.value():
+        #         dimmer_percent = rotary.value()
+        #         print("New Pressure Point : %d" % dimmer_percent)                
+        #         lcdDisplay = True   
+        #         SetMotorPercent(dimmer_percent)       
+        # elif mode == 6:
+        #     lcdDisplay = True  
+        #     updatePID = True  
+        #     if pressurePid.setpoint != 1:
+        #         pressurePid.setpoint = 1
            
-        #print("Recalculating")                         
+                   
+        #
+        # When enough time has gone by, read and update sensors
+        #            
         if time.ticks_ms() > switch_time:                
             print("Reading Sensors")
             temp = max.read()
@@ -383,8 +392,7 @@ try:
                 raise Exception('OVER TEMP')
                 
             pid.setpoint = goalTemp    
-            # Compute new output from the PID according to the systems current value
-            
+            # Compute new output from the PID according to the systems current value            
             if mode != 4:
                 control = pid(temp) 
             else:
@@ -392,63 +400,63 @@ try:
                 
             switch_time = time.ticks_ms() + 2000                       
                
-                     
-        if (time.ticks_ms() > nextPrintTime) or display:
-            #print("Displaying")
+        #
+        # Update serial
+        # 
+        if (time.ticks_ms() > nextPrintTime) or display:            
             lcdDisplay = True
             nextPrintTime = time.ticks_ms() + 250
             print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
-            #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))
-            
+            #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))            
             msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
             uart.write(msg.encode('utf-8'))
-            
+                
         if updatePID:
             pid = PID(p, i, d, setpoint=goalTemp, scale='ms')
             pid.output_limits = (0, 1)    # Output value will be between 0 and 10
             pid.set_auto_mode(True, last_output=0)
             print("PID UPDATED")
             
-        if 0 == button.value():
-            mode = mode + 1
-            if mode > 6:
-                mode = 0              
-            lcdDisplay = True
+        # if 0 == button.value():
+        #     mode = mode + 1
+        #     if mode > 6:
+        #         mode = 0              
+        #     lcdDisplay = True
                         
-            if 0 == mode:                
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set(goalTemp * 10)                
-                groupheadSolenoid.value(1)   
-            if 1 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set(p * 100)
-                mode = 6                
-                groupheadSolenoid.value(0)   
-            if 2 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set(i * 100)
-                mode = 6               
-                groupheadSolenoid.value(0)   
-            if 3 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set(d * 100)
-                mode = 6
-                groupheadSolenoid.value(0)
-            if 4 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set((int)(control*100))
-                mode = 6
-                groupheadSolenoid.value(0)
-            if 5 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set((int)(dimmer_percent))
-                mode = 6
-                groupheadSolenoid.value(0)
-            if 6 == mode:
-                rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
-                rotary.set((int)(dimmer_percent))
-                groupheadSolenoid.value(1)
-            sleep(.25)                
+        #     if 0 == mode:                
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=1100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set(goalTemp * 10)                
+        #         groupheadSolenoid.value(1)   
+        #     if 1 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set(p * 100)
+        #         mode = 6                
+        #         groupheadSolenoid.value(0)   
+        #     if 2 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set(i * 100)
+        #         mode = 6               
+        #         groupheadSolenoid.value(0)   
+        #     if 3 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=400, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set(d * 100)
+        #         mode = 6
+        #         groupheadSolenoid.value(0)
+        #     if 4 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set((int)(control*100))
+        #         mode = 6
+        #         groupheadSolenoid.value(0)
+        #     if 5 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set((int)(dimmer_percent))
+        #         mode = 6
+        #         groupheadSolenoid.value(0)
+        #     if 6 == mode:
+        #         rotary = RotaryIRQ(pin_num_clk=2, pin_num_dt=1,  min_val=0,max_val=100, reverse=False, range_mode=RotaryIRQ.RANGE_BOUNDED)
+        #         rotary.set((int)(dimmer_percent))
+        #         groupheadSolenoid.value(1)
+        #     sleep(.25)                
         
         
         if lcdDisplay:
