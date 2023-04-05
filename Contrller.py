@@ -60,10 +60,9 @@ uart.write("Welcome to OpenCoffee\r\n")
 print("123_Running.")
 
 dimmer_percent = 0
-def SetMotorPercent(percent):
-    global dimmer_percent   
-    v = (int)((percent / 100) * 65536)
-    print("Setting Dimmer : %d, %d" % (percent, v)) 
+def SetMotorPercent(percent):    
+    global dimmer_percent          
+    v = (int)((percent / 100) * 65536)       
     dimmer.duty_u16(v) # duty cycle 50% of 16 bit number
     dimmer_percent = percent
     
@@ -148,7 +147,7 @@ state=1
 rotary = RotaryIRQ(pin_num_clk=2, 
               pin_num_dt=1, 
               min_val=0, 
-              max_val=4, 
+              max_val=3, 
               reverse=True, 
               range_mode=RotaryIRQ.RANGE_BOUNDED)
 uart.write("RotaryIRQ setup\r\n")
@@ -204,12 +203,8 @@ print("Pressure PID setup!")
  
 
 heater.value(0)
-rotary.set(goalTemp*10)
-print("Rotary Dial setup!")
-
 count = 0
 t0 = time.ticks_ms()
-
 control = 0.0
 heater_time = t0
 switch_time = t0
@@ -260,16 +255,26 @@ try:
     
     
     while True :        
-        f.flush()  
+        # f.flush()  
         t = time.ticks_ms() 
-        b = button.value()
-        
-        # while True:
+       
+         
         pressure = convertPressure(pressureSensor.read(0))
-        dimmer_percent = pressurePid(pressure)
-        print("Pressure: %f,   Dimmer: %d, Goal: %d" % (pressure, dimmer_percent, pressurePid.setpoint))
-        SetMotorPercent(dimmer_percent)    
-    
+        
+        if 0 == button.value():
+            print ("Button Down!! in mode %d" % (mode))
+            dimmer_percent = pressurePid(pressure)
+            print("Pressure: %f,   Dimmer: %d, Goal: %d" % (pressure, dimmer_percent, pressurePid.setpoint))
+            SetMotorPercent(dimmer_percent) 
+            
+            if mode == 0 or mode == 1:
+                groupheadSolenoid.value(1)               
+            else:
+                groupheadSolenoid.value(0)               
+        else:
+            SetMotorPercent(0)
+            groupheadSolenoid.value(0)               
+            
         display=False
         lcdDisplay = False 
         updatePID = False   
@@ -278,47 +283,59 @@ try:
         #
         # Process UART
         #
-        if(uart.any()):
-            data = uart.readline().strip().decode('utf-8')
-            if not data.startswith("tick"):
-                #print("Serial : %d" % len(data))
-                print("UART GOT : [%s]\r\n" % data)
+        # if(uart.any()):
+        #     data = uart.readline().strip().decode('utf-8')
+        #     if not data.startswith("tick"):
+        #         #print("Serial : %d" % len(data))
+        #         print("UART GOT : [%s]\r\n" % data)
                 
-                commands = data.split("\n")
-                for command in commands:                                        
-                    if command.startswith("TEMP:"):
-                        mode = 0
-                        goalTemp = float(command[5:])
-                        rotary.set(goalTemp * 10)
+        #         commands = data.split("\n")
+        #         for command in commands:                                        
+        #             if command.startswith("TEMP:"):
+        #                 mode = 0
+        #                 goalTemp = float(command[5:])
+        #                 rotary.set(goalTemp * 10)
                         
-                    elif command.startswith('kill'):
-                        print("KILLING!")
-                        uart.write("KILLING!!!")
-                        os.remove("main.py")
-                        machine.reset()
+        #             elif command.startswith('kill'):
+        #                 print("KILLING!")
+        #                 uart.write("KILLING!!!")
+        #                 os.remove("main.py")
+        #                 machine.reset()
                         
-                    elif command.startswith('reboot'):
-                        uart.write("Rebooting")
-                        machine.reset()
+        #             elif command.startswith('reboot'):
+        #                 uart.write("Rebooting")
+        #                 machine.reset()
                         
-                    elif command.startswith("PID:"):
-                        mode = 0
-                        bits = command[4:].split(",")
-                        print(bits[0])
-                        print(bits[1])
-                        print(bits[2])
-                        p = (float)(bits[0])
-                        i = (float)(bits[1])
-                        d = (float)(bits[2])
-                        goalTemp = (float)(bits[3])
-                        rotary.set(goalTemp * 10)
+        #             elif command.startswith("PID:"):
+        #                 mode = 0
+        #                 bits = command[4:].split(",")
+        #                 print(bits[0])
+        #                 print(bits[1])
+        #                 print(bits[2])
+        #                 p = (float)(bits[0])
+        #                 i = (float)(bits[1])
+        #                 d = (float)(bits[2])
+        #                 goalTemp = (float)(bits[3])
+        #                 rotary.set(goalTemp * 10)
         
         # Change modes
         if mode != rotary.value():
             mode = rotary.value()
             print("MODE: %d" % (mode))
         
-         
+            # Preinfuse
+            if mode == 0:  #PreInfuse                         
+                pressurePid.setpoint = 1
+        
+            if mode == 1: #Pull Shot                                
+                pressurePid.setpoint = 9
+                
+            if mode == 2: #Steam              
+                pressurePid.setpoint = 0
+                
+            if mode == 3: #Water           
+                pressurePid.setpoint = 100
+        
         # if mode == 0:
         #     if goalTemp != rotary.value()/10:
         #         goalTemp = rotary.value()/10
@@ -374,13 +391,10 @@ try:
         #
         # When enough time has gone by, read and update sensors
         #            
-        if time.ticks_ms() > switch_time:                
-            print("Reading Sensors")
+        if time.ticks_ms() > switch_time: 
             temp = max.read()
-            print("...temp=%d" % temp)
-            
             pressure = convertPressure(pressureSensor.read(0))
-            print("...pressure=%f" % pressure)
+            print("P:%f, T:%d" % (pressure, temp))
             
             if temp > g_MaxTemp:
                 goalTemp = 0
@@ -406,7 +420,7 @@ try:
         if (time.ticks_ms() > nextPrintTime) or display:            
             lcdDisplay = True
             nextPrintTime = time.ticks_ms() + 250
-            print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
+            #print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
             #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))            
             msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
             uart.write(msg.encode('utf-8'))
@@ -460,27 +474,21 @@ try:
         
         
         if lcdDisplay:
-            #print("Writing to LCD")
-            lcd_clear()
+            lcd_clear()    
+            gt = (float)(goalTemp)
+            
             if 0 == mode:
-                gt = (float)(goalTemp)
-                lcd_write(0, 0, ('Pull: %d/%d(C)' % (temp, gt)))
-                lcd_write(0, 1, ("%d   %d(C)" % (pressurePid.setpoint, (int)(temp))))    
-            if 1 == mode:
-                lcd_write(0, 0, ("P = %f" % (p)))
-            if 2 == mode:
-                lcd_write(0, 0, ("I = %f" % (i)))
-            if 3 == mode:
-                lcd_write(0, 0, ("D = %f" % (d)))
-            if 4 == mode:
-                lcd_write(0, 0, "*MANUAL HEATER*")
-                lcd_write(0, 1, ("%f %f(C)" % (control, temp)))
-            if 5 == mode:
-                lcd_write(0, 0, "PUMP : %d" % pressure)
-                lcd_write(0, 1, ("%d   %d(C)" % (dimmer_percent, (int)(temp))))
-            if 6 == mode:
                 lcd_write(0, 0, ('PreInfuse: %d/%d(C)' % (temp, gt)))
-                lcd_write(0, 1, ("%d   %d(C)" % (pressurePid.setpoint, (int)(temp))))                
+                lcd_write(0, 1, ("%f/%d" % (pressure, pressurePid.setpoint))) 
+            if 1 == mode:                
+                lcd_write(0, 0, ('Pull: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 1, ("%f/%d" % (pressure, pressurePid.setpoint))) 
+            if 2 == mode:
+                lcd_write(0, 0, ('NOT-IMPL Steam %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 1, ("%f/%d" % (pressure, pressurePid.setpoint))) 
+            if 3 == mode:
+                lcd_write(0, 0, ('Water: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 1, ("%f/%d" % (pressure, pressurePid.setpoint))) 
                 
         if updateConfig:
             with open("PID.config", 'w') as save:
