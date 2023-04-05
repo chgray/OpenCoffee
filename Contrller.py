@@ -52,17 +52,9 @@ def lcd_clear():
     if 0 != lcd:
         lcd.clear()
     
-    
-
 uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9), timeout=1000, timeout_char=1000)
 uart.init(bits=8, parity=None, stop=2)
-
 uart.write("Welcome to OpenCoffee\r\n")
-#while True:
-#    uart.write("BOOTED_X")
-#    print("Booted")
-#    sleep(1)
-#    #machine.restart()
 
 
 print("123_Running.")
@@ -82,13 +74,9 @@ dimmer.freq(60) #1000000)
 #https://www.amazon.com/gp/product/B06Y1DT1WP/ref=ppx_yo_dt_b_asin_title_o02_s00?ie=UTF8&psc=1
 #50Hz or 60Hz PWM input signal up to 10kHz Input voltage level up to VCC (0-3.3V / 0-5V) 50HZ LED
 dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
-#SetMotorPercent(0)
 SetMotorPercent(0)
 
-
-#led = Pin(25, Pin.OUT)
 heater = Pin(26, Pin.OUT)
-#button = Pin(12, Pin.IN, Pin.PULL_DOWN)
 button = Pin(0, Pin.IN, Pin.PULL_DOWN)
 timer = Timer()
 
@@ -133,10 +121,7 @@ def convertPressure(measure):
     # Output: 0.5V–4.5V linear voltage output. 0 psi outputs 0.5V, 100 psi outputs 2.5V, 200 psi outputs 4.5V
     
     delta = 6.144 / 2048 #6.144 comes from PGA_6_144V (max value for 11 bits)
-    v = measure * delta      
-    #print("Pressure : %d" % measure) 
-    #print("   Delta : %f" % delta) 
-    #print("   V : %f" % v)     
+    v = measure * delta          
     p = v - 0.5
     pDelta = 200 / 4 #from alg above
     psi = p * pDelta
@@ -241,13 +226,11 @@ def toggle_heater(timer):
     # Decide if we need to turn off the heater due to our % time being up
     if heater_off_time != -1 and time.ticks_ms() > heater_off_time: 
         delta = time.ticks_ms() 
-        #print(" ON_Delta %d, %f" % (heater_off_time - delta, control))
         heater_off_time = -1
     
     # Decide if we're beyond the cycle time period 
     if time.ticks_ms() > heater_cycle_time: 
         delta = time.ticks_ms() 
-        #print("OFF_Delta %d, %f" % (heater_cycle_time - delta, control))
         heater_cycle_time = -1
     
     # Recompute stats if we're there
@@ -263,12 +246,9 @@ def toggle_heater(timer):
         
         # Turn On Heater
         if duration != 0:
-            #print("ON : %d, %d" % (duration, sleepTime))
             heater.value(1)
             
     if -1 == heater_off_time:
-        #if heater.value() == 1:
-        #    print("OFF")
         heater.value(0)
             
 timer.init(freq=100, mode=Timer.PERIODIC, callback=toggle_heater)
@@ -332,8 +312,7 @@ try:
                         goalTemp = (float)(bits[3])
                         rotary.set(goalTemp * 10)
         
-        #print("UART processing finished")  
-        #print("Mode=%d" % mode)                                       
+                                      
         if mode == 0:
             if goalTemp != rotary.value()/10:
                 goalTemp = rotary.value()/10
@@ -411,8 +390,7 @@ try:
             else:
                 control = rotary.value()
                 
-            switch_time = time.ticks_ms() + 2000
-            #print("Recalculated.")                   
+            switch_time = time.ticks_ms() + 2000                       
                
                      
         if (time.ticks_ms() > nextPrintTime) or display:
@@ -500,14 +478,7 @@ try:
             with open("PID.config", 'w') as save:
                 save.write("%d,%d,%d,%d" % (p*100, i*100, d*100, goalTemp*10))
         count = count + 1
-                        
-        #except OSError:
-        #    heater.value(0)
-        #    SetMotorPercent(0)
-        #    timer.deinit()
-        #    f.write("Crashed")            
-        #    print("OSError")
-      
+                              
 
 except KeyboardInterrupt:
     heater.value(0)
@@ -529,9 +500,6 @@ except Exception as e:
 sleep(.25)
         
         
-    
-#lcd_clear()
-#lcd_message("BYE")
 heater.value(0)
 SetMotorPercent(0)
 print("BYE")
