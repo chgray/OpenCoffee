@@ -40,3 +40,8 @@ sleep(5000)
 #heater_pid.freq(10)
 #heater_pid.duty_u16((int)(65535/4) * 4)
 #sleep(5000)
+
+dimmer_percent = 0
+def SetMotorPercent(percent):
+    
+    7545,  1.46

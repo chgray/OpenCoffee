@@ -11,78 +11,95 @@ import time
 
 import machine, onewire, ds18x20, select
 
-
 from time import sleep
 from machine import Pin
 
+from machine import WDT
 
+
+fixedLed = Pin("LED", Pin.OUT)
+wdt = WDT(timeout=8000) #timeout is in ms
+timer = Timer()
+
+fixedLed.value(1)
+fixedLed.toggle()
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
-#uart.write("UART: welcome to OpenCoffee")
-#flipper = Pin(4, Pin.OUT)
-#flipper2 = Pin(5, Pin.OUT)
-#flipper.value(1)
-#flipper2.value(0)
-#while True:
-#    uart.write("hi")
-    #flipper.toggle()
-    #flipper2.toggle()
-#    print("hi")
-#    sleep(1)
+def pokeWatchDog():
+    global wdt
+    global fixedLed
     
+    #led = Pin("LED", Pin.OUT)
+    fixedLed.value(0)
+    sleep(1)
+    print("WatchDog Poke")
+    fixedLed.value(1)
+    wdt.feed() #resets countdown
+
+def pokeWatchDogTimer(t):
+    print("Watchdog Timer")
+    pokeWatchDog()
+
+
+timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
+
 
 class WifiLog(object):
-    
+
     m_ssid = 'Hello'
     m_password = 'deadbeef01'
-   
+
     m_connected = False
     m_Exit = False
-    
+
     def close_connection(self):
-        
+
         if self.m_connected:
             print("Closing Socket:")
             self.m_socket.close()
-        
+
         self.m_connected = False
-       
+
     def close(self):
         print("close() - reseting!")
         machine.reset()
         self.close_connection()
-        
-        
+
+
         if self.m_Exit == False:
             print("Disconnecting and deactivating wifi")
             self.wlan.disconnect()
             self.wlan.active(True)
         self.m_Exit = True
-               
-        
+
+
+
     def connect_thread(self):
         try:
             while True:
                     print("Hi wifi")
-                    print("Scanning:")                   
-                    #machine.reset()
-                    
+                    print("Scanning:")
+
+
+                    pokeWatchDog()
                     scanlist = self.wlan.scan()
+
                     print("Got Scanlist")
                     for result in scanlist:
                       ssid, bssid, channel, RSSI, authmode, hidden = result
                       print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
 
                     print("Scan Complete")
-                    
-                    
+
+                    pokeWatchDog()
                     self.wlan.connect(self.m_ssid, self.m_password)
-                    
+
                     while True:
                         print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
                         if self.wlan.status() < 0 or self.wlan.status() >= 3:
                             break
+                        pokeWatchDog()
                         time.sleep(1)
 
                     if self.wlan.isconnected():
@@ -94,75 +111,88 @@ class WifiLog(object):
                         print('network connection failed')
                         continue
 
-                    addr = socket.getaddrinfo('0.0.0.0', 22)[0][-1]
+                    addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
 
+                    pokeWatchDog()
                     s = socket.socket()
                     s.bind(addr)
                     s.listen(1)
 
                     print('listening on', addr)
-                
 
-                    # Listen for connections
-                    needExit = False
-                    while needExit == False:
-                            clientSock, addr = s.accept()
-                            print('client connected from', addr)                            
-                            clientSock.send("Welcome to OpenCoffee\r\n")
-                            
-                            poller = select.poll()
-                            poller.register(clientSock, select.POLLIN)
-                            
-                                                     
-                            while True:    
-                                res = poller.poll(100)  # time in milliseconds
-                                
-                                if res:                                    
-                                    print('socket got data')
-                                    #toss = clientSock.recv(100)
-                                    #data = toss.decode("utf-8")
-                                    data = clientSock.readline().decode("utf-8").strip()
-                                    
-                                    if data is 'kill':
+
+                    # periodic at 1kHz
+                    timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
+                    clientSock, addr = s.accept()
+                    #timer.deinit()
+                    print('client connected from', addr)
+
+                    poller = select.poll()
+                    poller.register(clientSock, select.POLLIN)
+
+                    #clientSock.settimeout(5000)
+                    clientSock.send("Welcome to OpenCoffee\r\n")
+
+                    while True:
+                        res = poller.poll(100)  # time in milliseconds
+                        pokeWatchDog()
+
+                        if res:
+                            inputBuffer = clientSock.recv(1000)
+                            print('socket got data bytes=%d' % len(inputBuffer))
+                            #print("line complete")
+
+                            try:
+                                commands = inputBuffer.strip().decode('utf-8').split("\n")
+                                for command in commands:
+                                    if command is 'kill':
                                         print("KILLING!")
                                         clientSock.write("KILLING!!!")
-                                        os.remove("main.py")
-                                    elif data is 'reboot':
+                                        os.remove("/main.py")
+                                        clientSock.write("file deleted")
                                         machine.reset()
+                                        clientSock.write("...reboot didnt happen")
+                                    elif command is 'reboot':
+                                        machine.reset()
+                                    elif command.startswith("PASS:"):
+                                        clientSock.write("PASSING OFF %s\r\n" % command[5:])
+                                        uart.write(command[5:])
                                     else:
-                                        clientSock.write("Unknown command %s, all I know is kill and reboot" % data)
-                                        
-                        
-                                    print("MSG: %s" % data)
-                                            
-                                if(uart.any()):
-                                    data = uart.read()
-                                    #uart.write("hello world")
-                                    #print("D %d " % len(data))
-                                    #data_string = data.decode('utf-8')
-                                    print(data)
-                                    clientSock.write(data)
-                                #print("DTA %s" % (string)data)                                
-                                #sleep(2)
-                                #print("Waiting.")
-                                uart.write("tick\r\n")
-                                #clientSock.send(".")
-                     
+                                        clientSock.write("Unknown command %s, all I know is kill and reboot\r\n" % command)
+
+                            except:
+                                print("Serial Input Error")
+
+                        if(uart.any()):
+                            data = uart.read()
+                            #uart.write("hello world")
+                            #print("D %d " % len(data))
+                            #data_string = data.decode('utf-8')
+                            print("Serial : %d" % len(data))
+                            clientSock.write(data)
+                        #print("DTA %s" % (string)data)
+                        #sleep(2)
+                        #print("Waiting.")
+                        #uart.write("tick\r\n")
+                        #clientSock.send(".")
+
                     print("Received Exit : Closing Listening Socket")
                     s.close
                     sleep(5)
-                
+
         except KeyboardInterrupt as e:
                 print("KEYBOARD INTERUPT!")
                 #self.close()
-    
+	except:
+		machine.reset()
+
     def __init__(self):
         self.wlan = network.WLAN(network.STA_IF)
         self.wlan.active(True)
-        
-   
-    
-led = Pin(25, Pin.OUT)
+
+
+
+
 
 w = WifiLog()
 #w.log("hi")
@@ -179,19 +209,19 @@ def ManageWifi():
         print('Closing Up...')
         print("OSERROR() - reseting!")
         #machine.reset()
-        
+
     except KeyboardInterrupt as e:
         w.close()
         print('Keyboard-Closing Up...')
         print("KEYBOARDINTERRUPT() - reseting!")
         #machine.reset()
-    
+
 
 try:
     ManageWifi()
 
 except KeyboardInterrupt as e:
     w.close()
-    
-    
+
+
 print("Bye!!")
