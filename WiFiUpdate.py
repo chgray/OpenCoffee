@@ -86,68 +86,75 @@ class WifiLog(object):
         self.m_Exit = True
 
     def connect_thread(self):
+        fixedLed = Pin("LED", Pin.OUT)
         try:
             print("Getting Creds")
             creds = WifiCreds
             print ("Got Creds")
             
             while True:                    
-                    print("Scanning:")
+                print("Scanning:")
 
-                    self.m_ssid = creds.SSID()
-                    self.m_password = creds.PWD()
-                    
-                    print("SSID : %s" % self.m_ssid)
-                    
+                self.m_ssid = creds.SSID()
+                self.m_password = creds.PWD()
+                
+                print("SSID : %s" % self.m_ssid)
+                
+                pokeWatchDog()
+                scanlist = self.wlan.scan()
+
+                print("Got Scanlist")
+                for result in scanlist:
+                    ssid, bssid, channel, RSSI, authmode, hidden = result
+                    print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
+
+                print("Scan CompleteX")
+
+                pokeWatchDog()
+                print("Poked")
+                print("Connecting to %s" % self.m_ssid)
+                self.wlan.connect(self.m_ssid, self.m_password)
+                
+                while True:
+                    print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
+                    if self.wlan.status() < 0 or self.wlan.status() >= 3:
+                        break
                     pokeWatchDog()
-                    scanlist = self.wlan.scan()
+                    time.sleep(1)
 
-                    print("Got Scanlist")
-                    for result in scanlist:
-                      ssid, bssid, channel, RSSI, authmode, hidden = result
-                      print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
+                if self.wlan.isconnected():
+                    #fixedLed.value(1)
+                    print('connected')
+                    status = self.wlan.ifconfig()
+                    print( 'ip = ' + status[0] )
+                    uart.write('ip' + status[0])
+                else:
+                    print('network connection failed')
+                    continue
 
-                    print("Scan CompleteX")
+                addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
+                
+                # periodic at 1kHz
+                timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
+                
+                print("Downloading")
+                url = "http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py"
+                response = urequests.get(url)
 
-                    pokeWatchDog()
-                    print("Poked")
-                    print("Connecting to %s" % self.m_ssid)
-                    self.wlan.connect(self.m_ssid, self.m_password)
+                print(response)
+                #print(response.text)
+                with open("main.py", "w") as file:
+                    file.write(response.text)
                     
-                    while True:
-                        print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
-                        if self.wlan.status() < 0 or self.wlan.status() >= 3:
-                            break
-                        pokeWatchDog()
-                        time.sleep(1)
-
-                    if self.wlan.isconnected():
-                        #fixedLed.value(1)
-                        print('connected')
-                        status = self.wlan.ifconfig()
-                        print( 'ip = ' + status[0] )
-                        uart.write('ip' + status[0])
-                    else:
-                        print('network connection failed')
-                        continue
-
-                    addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
-                    
-                    # periodic at 1kHz
-                    timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
-                    
-                    print("Downloading")
-                    url = "http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py"
-                    response = urequests.get(url)
-
-                    print(response)
-                    print(response.text)
-                    with open("main.py", "w") as file:
-                        file.write(response.text)
-                        
-                    
-                   
-                    print("BYE")
+                print("Doloaded and saved!")
+                
+                print("BYE")
+                
+                while True:
+                    fixedLed.value(1)                    
+                    sleep(0.2)
+                    fixedLed.value(0)
+                    sleep(0.2)
             
         except KeyboardInterrupt as e:
             print("KEYBOARD INTERUPT!")
@@ -197,10 +204,7 @@ except KeyboardInterrupt as e:
 
 
 print("Bye!! - xyz")
-while True:
-    fixedLed.value(1)
-    sleep(0.2)
-    fixedLed.value(0)
+
                         
 
 
