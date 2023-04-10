@@ -25,7 +25,9 @@ wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
 fixedLed.value(1)
-fixedLed.toggle()
+sleep(2)
+fixedLed.value(0)
+
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
 
@@ -42,16 +44,16 @@ def pokeWatchDog():
         machine.reset()
     
     #led = Pin("LED", Pin.OUT)
-    fixedLed.value(0)
-    sleep(1)
+    #fixedLed.value(0)
+    #sleep(1)
     #print("WatchDog Poke")
-    fixedLed.value(1)
+    #fixedLed.value(1)
     wdt.feed() #resets countdown
     
 
 def pokeWatchDogTimer(t):
     #print("Watchdog Timer")
-    fixedLed.toggle()
+    #fixedLed.toggle()
     pokeWatchDog()
 
 
@@ -120,6 +122,7 @@ class WifiLog(object):
                         time.sleep(1)
 
                     if self.wlan.isconnected():
+                        fixedLed.value(1)
                         print('connected')
                         status = self.wlan.ifconfig()
                         print( 'ip = ' + status[0] )
