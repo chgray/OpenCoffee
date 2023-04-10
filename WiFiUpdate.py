@@ -2,6 +2,8 @@ import network, os
 import socket
 import time
 import ubinascii
+import hashlib
+import binascii
 import _thread
 from WifiCreds import *
 
@@ -151,6 +153,12 @@ class WifiLog(object):
                 print(response)
                 with open("main.py2", "w") as file:
                     file.write(response.text)
+                    
+                hash_object = hashlib.sha256(response.text)
+                hex_dig = binascii.hexlify(hash_object.digest())
+                #hex_dig = hash_object.hexdigest()
+                
+                print("Hex: %s" % hex_dig)
                 
                 if(fileExists("main_old.py")):
                     os.remove("main_old.py")
