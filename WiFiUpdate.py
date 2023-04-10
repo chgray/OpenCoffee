@@ -51,11 +51,12 @@ def pokeWatchDog():
 
 def pokeWatchDogTimer(t):
     #print("Watchdog Timer")
+    fixedLed.toggle()
     pokeWatchDog()
 
 
 print("Initing Timer")
-#timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
+timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
 print("...timer inited")
 
 class WifiLog(object):
