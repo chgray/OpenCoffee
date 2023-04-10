@@ -1,4 +1,4 @@
-import network
+import network, os
 import socket
 import time
 import ubinascii
@@ -33,6 +33,13 @@ uart.init(bits=8, parity=None, stop=2)
 
 
 startTime = time.ticks_ms() 
+
+def fileExists(path):
+    try:
+        os.stat(path)
+        return True
+    except OSError:
+        return False
 
 def pokeWatchDog():
     global wdt
@@ -143,9 +150,14 @@ class WifiLog(object):
 
                 print(response)
                 #print(response.text)
-                with open("main.py", "w") as file:
+                with open("main.py2", "w") as file:
                     file.write(response.text)
+                
+                if(fileExists("main_old.py")):
+                    os.remove("main_old.py")
                     
+                os.rename("main.py", "main_old.py")
+                os.rename("main.py2", "main.py")
                 print("Doloaded and saved!")
                 
                 print("BYE")
