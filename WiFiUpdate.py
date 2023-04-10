@@ -149,7 +149,6 @@ class WifiLog(object):
                 response = urequests.get(url)
 
                 print(response)
-                #print(response.text)
                 with open("main.py2", "w") as file:
                     file.write(response.text)
                 
@@ -162,11 +161,13 @@ class WifiLog(object):
                 
                 print("BYE")
                 
-                while True:
+                for y in range(0, 10):
                     fixedLed.value(1)                    
                     sleep(2)
                     fixedLed.value(0)
                     sleep(2)
+                    
+                machine.reset()
             
         except KeyboardInterrupt as e:
             print("KEYBOARD INTERUPT!")
