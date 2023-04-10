@@ -24,9 +24,9 @@ fixedLed = Pin("LED", Pin.OUT)
 wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
-fixedLed.value(1)
-sleep(2)
-fixedLed.value(0)
+#fixedLed.value(1)
+#sleep(2)
+#fixedLed.value(0)
 
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
@@ -122,7 +122,7 @@ class WifiLog(object):
                         time.sleep(1)
 
                     if self.wlan.isconnected():
-                        fixedLed.value(1)
+                        #fixedLed.value(1)
                         print('connected')
                         status = self.wlan.ifconfig()
                         print( 'ip = ' + status[0] )
@@ -146,6 +146,11 @@ class WifiLog(object):
                         file.write(response.text)
                         
                     
+                    while True:
+                        fixedLed.value(1)
+                        sleep(0.2)
+                        fixedLed.value(0)
+                        
                     print("BYE")
             
         except KeyboardInterrupt as e:
@@ -196,3 +201,5 @@ except KeyboardInterrupt as e:
 
 
 print("Bye!! - xyz")
+
+
