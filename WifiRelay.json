@@ -1,0 +1,9 @@
+{
+  "DeviceFunction":"WifiRelay",
+  "Files":[
+    {
+      "URL":"http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py",
+      "Hash":"NEW"
+    }
+  ]
+}

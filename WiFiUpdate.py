@@ -231,12 +231,27 @@ def ManageWifi():
         #machine.reset()
 
 
-try:
-    ManageWifi()
 
-except KeyboardInterrupt as e:
-    w.close()
+#
+# Read update file
+#
+import ujson
 
+with open('DeviceConfig.json', 'r') as f:
+    data = ujson.load(f)
+    
+    print("Function : %s" % data["DeviceFunction"])
+    
+    for key, value in enumerate(data['Files']):        
+        print (value["URL"])
+        print (value["Hash"])
+        #print(key, value)
+
+
+#try:
+#    ManageWifi()
+#except KeyboardInterrupt as e:
+#    w.close()
 
 print("Bye!! - xyz")
 
