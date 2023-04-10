@@ -4,6 +4,7 @@ import time
 import ubinascii
 import hashlib
 import binascii
+import sys
 import _thread
 from WifiCreds import *
 
@@ -155,12 +156,15 @@ class WifiLog(object):
                 hash_object = hashlib.sha256(response.text)
                 hex_dig = binascii.hexlify(hash_object.digest())     
                 
-                f = open('main.py')
-                orig_file = f.read()               
-                f.close()
+                if(fileExists("main.py")):
+                    f = open('main.py')
+                    orig_file = f.read()               
+                    f.close()
                 
-                orig_hash_object = hashlib.sha256(orig_file)
-                orig_hex_dig = binascii.hexlify(orig_hash_object.digest())
+                    orig_hash_object = hashlib.sha256(orig_file)
+                    orig_hex_dig = binascii.hexlify(orig_hash_object.digest())
+                else:
+                    orig_hex_dig = "No File"
                 
                 print("Orig_Hex: %s" % orig_hex_dig)                
                 print(" New_Hex: %s" % hex_dig)
@@ -171,8 +175,8 @@ class WifiLog(object):
                 
                 if(fileExists("main_old.py")):
                     os.remove("main_old.py")
-                    
-                os.rename("main.py", "main_old.py")
+                if(fileExists("main.py")):  
+                    os.rename("main.py", "main_old.py")
                 os.rename("main.py2", "main.py")
                 print("Downloaded and saved!")
                 
@@ -189,9 +193,10 @@ class WifiLog(object):
         except KeyboardInterrupt as e:
             print("KEYBOARD INTERUPT!")
             #self.close()
-        except OSError as e:                
+        except OSError as e:
+                         
             print(" Reseting...")
-            #sys.print_exception(e)
+            sys.print_exception(e)
         	#machine.reset()
 
     def __init__(self):
