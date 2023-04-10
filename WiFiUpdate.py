@@ -164,9 +164,9 @@ class WifiLog(object):
                 
                 while True:
                     fixedLed.value(1)                    
-                    sleep(0.1)
+                    sleep(2)
                     fixedLed.value(0)
-                    sleep(0.1)
+                    sleep(2)
             
         except KeyboardInterrupt as e:
             print("KEYBOARD INTERUPT!")
