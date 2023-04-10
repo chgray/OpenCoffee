@@ -146,11 +146,7 @@ class WifiLog(object):
                         file.write(response.text)
                         
                     
-                    while True:
-                        fixedLed.value(1)
-                        sleep(0.2)
-                        fixedLed.value(0)
-                        
+                   
                     print("BYE")
             
         except KeyboardInterrupt as e:
@@ -201,5 +197,10 @@ except KeyboardInterrupt as e:
 
 
 print("Bye!! - xyz")
+while True:
+    fixedLed.value(1)
+    sleep(0.2)
+    fixedLed.value(0)
+                        
 
 
