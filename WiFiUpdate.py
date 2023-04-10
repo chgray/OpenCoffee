@@ -149,23 +149,32 @@ class WifiLog(object):
                 print("Downloading")
                 url = "http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py"
                 response = urequests.get(url)
+                
+               
 
+                hash_object = hashlib.sha256(response.text)
+                hex_dig = binascii.hexlify(hash_object.digest())     
+                
+                f = open('main.py')
+                orig_file = f.read()               
+                f.close()
+                
+                orig_hash_object = hashlib.sha256(orig_file)
+                orig_hex_dig = binascii.hexlify(orig_hash_object.digest())
+                
+                print("Orig_Hex: %s" % orig_hex_dig)                
+                print(" New_Hex: %s" % hex_dig)
+                
                 print(response)
                 with open("main.py2", "w") as file:
                     file.write(response.text)
-                    
-                hash_object = hashlib.sha256(response.text)
-                hex_dig = binascii.hexlify(hash_object.digest())
-                #hex_dig = hash_object.hexdigest()
-                
-                print("Hex: %s" % hex_dig)
                 
                 if(fileExists("main_old.py")):
                     os.remove("main_old.py")
                     
                 os.rename("main.py", "main_old.py")
                 os.rename("main.py2", "main.py")
-                print("Doloaded and saved!")
+                print("Downloaded and saved!")
                 
                 print("BYE")
                 
