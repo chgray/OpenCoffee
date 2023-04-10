@@ -163,9 +163,9 @@ class WifiLog(object):
                 
                 for y in range(0, 10):
                     fixedLed.value(1)                    
-                    sleep(2)
+                    sleep(0.1)
                     fixedLed.value(0)
-                    sleep(2)
+                    sleep(0.1)
                     
                 machine.reset()
             
