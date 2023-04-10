@@ -133,12 +133,12 @@ class WifiLog(object):
                     timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
                     
                     print("Downloading")
-                    url = "https://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/experimenting/WiFiUpdate.py"
+                    url = "http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py"
                     response = urequests.get(url)
 
                     print(response)
                     print(response.text)
-                    with open("file.txt", "w") as file:
+                    with open("main.py", "w") as file:
                         file.write(response.text)
                         
                     
