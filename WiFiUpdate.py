@@ -1,6 +1,7 @@
 import network, os
 import socket
 import time
+import io
 import ubinascii
 import hashlib
 import binascii
@@ -231,22 +232,104 @@ def ManageWifi():
         #machine.reset()
 
 
-
 #
 # Read update file
 #
 import ujson
-
-with open('DeviceConfig.json', 'r') as f:
-    data = ujson.load(f)
+class CoffeeUpdater(object):
     
-    print("Function : %s" % data["DeviceFunction"])
-    
-    for key, value in enumerate(data['Files']):        
-        print (value["URL"])
-        print (value["Hash"])
-        #print(key, value)
+    def __init__(self, downloader):
+        print("OpenCoffee Init")
+        self.downloader = downloader
 
+    def Update(self):
+        f = self.downloader.LoadFile("DeviceConfig.json")
+        data = ujson.load(io.StringIO(f))
+        
+        print("Function : %s" % data["DeviceFunction"])
+        
+        for key, value in enumerate(data['Files']):        
+            print ("URL=" + value["URL"])
+            print ("HASH=" + value["Hash"])
+            print ("FILENAME=" + value["FileName"])
+            
+            self.downloader.LoadContent(value["URL"])
+            #print(key, value)
+
+class CoffeeFileDownloader(object):
+    def __init__(self):
+        print("OpenCoffee Downloader (FILE)")
+        
+    def LoadFile(self, location):
+        print("Getting %s from FILESYSTEM" % location)
+        with open('DeviceConfig.json', 'r') as f:
+            return f.read()
+        
+    def LoadContent(self, location):
+        print("Getting %s from FILESYSTEM" % location)
+        with open('DeviceConfig.json', 'r') as f:
+            return f.read()
+
+class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
+    def __init__(self):
+        super().__init__()
+        print("OpenCoffee Downloader (Wifi)")
+        self.wlan = network.WLAN(network.STA_IF)
+        self.wlan.active(True)
+        
+    def Connect(self):
+        creds = WifiCreds
+        self.m_ssid = creds.SSID()
+        self.m_password = creds.PWD()
+
+        print("SSID : %s" % self.m_ssid)
+    
+        scanlist = self.wlan.scan()
+      
+        for result in scanlist:
+            ssid, bssid, channel, RSSI, authmode, hidden = result
+            print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
+      
+        print("Connecting to %s" % self.m_ssid)
+        self.wlan.connect(self.m_ssid, self.m_password)
+
+        while True:
+            print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
+            if self.wlan.status() < 0 or self.wlan.status() >= 3:
+                break
+            sleep(0.5)
+
+        if self.wlan.isconnected():
+            print('connected')
+            status = self.wlan.ifconfig()
+            print( 'ip = ' + status[0] )
+        else:
+            print('network connection failed')
+            machine.reset()      
+       
+
+    def LoadContent(self, location):
+        print("Getting %s from WIFI" % location)
+
+#
+# On PicoW init wifi 
+#
+import network
+
+if hasattr(network, "WLAN"):
+    print("WIFI")
+    downloader = CoffeeFileDownloaderWifi()
+    downloader.Connect()
+else:
+    #downloader = CoffeeFileDownloader()
+    print("NOT WIFI DEVICE!!!! - EXITING")
+    exit(1)
+
+
+#downloader.LoadContent("DeviceConfig.json")
+
+cu = CoffeeUpdater(downloader)
+cu.Update()
 
 #try:
 #    ManageWifi()
