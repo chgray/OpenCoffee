@@ -141,6 +141,7 @@ class CoffeeUpdater(object):
                     needUpdate = True
                 else:
                     print("    LocalFile=TRUE;  checking hashs to see if update is needed")
+                    print("        LocalFileHash=%s" % localFile.Hash())
                     if localFile.Hash() != value["Hash"]:
                         print("    UPDATE REQUIRED;  hashes differ")
                         needUpdate = True
@@ -160,7 +161,7 @@ class CoffeeUpdater(object):
                 if needUpdate:
                     print("")
                     print("    Performing Update...")
-                    with open(value["FileName"] + ".temp", "w") as file:
+                    with open(value["FileName"] + ".temp", "wb") as file:
                         print("    Writing temp file")
                         file.write(content.Content())
                     
@@ -182,11 +183,14 @@ class CoffeeUpdater(object):
 class ChecksumContent(object):
     
     def __init__(self, content):
-        #print("ChecksumContent")
+        print("ChecksumContent : %d" % len(content))
+        
         self.shaHash = hashlib.sha256(content)
         self.hexHash = binascii.hexlify(self.shaHash.digest())
         self.hexHash = self.hexHash.decode('utf-8')
         self.content = content
+        
+        print(self.Hash())  
         
         #print("HexHash %s" % self.hexHash)        
         
@@ -206,7 +210,7 @@ class CoffeeFileDownloader(object):
         if fileExists(location) == False:
             return None
         
-        with open('DeviceConfig.json', 'r') as f:
+        with open(location, 'rb') as f:
             ret = ChecksumContent(f.read())
             return ret
         
@@ -216,7 +220,7 @@ class CoffeeFileDownloader(object):
         if fileExists(location) == False:
             return None
         
-        with open(location, 'r') as f:
+        with open(location, 'rb') as f:
             ret = ChecksumContent(f.read())
             return ret
 
