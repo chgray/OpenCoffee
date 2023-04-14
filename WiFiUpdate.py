@@ -106,9 +106,21 @@ class CoffeeUpdater(object):
         self.downloader = downloader
 
     def Update(self):
+        # Bootstrap ourselves with DeviceConfig on disk
         f = self.downloader.LoadFile("DeviceConfig.json")
-        data = ujson.load(io.StringIO(f))
+        data = ujson.load(io.StringIO(f.Content()))
         
+        # Retrieve our high water config file
+        f = self.downloader.LoadContent(data["DeviceFunction"])
+        data = ujson.load(io.StringIO(f.Content()))
+                
+        if f.Hash() == data["DeviceFunctionHash"]:
+            print ("Downloaded file looks good")
+        else:
+            print ("ERROR: Dont update - corrupted download")
+            return
+        
+               
         print("Function : %s" % data["DeviceFunction"])
         
         for key, value in enumerate(data['Files']):        
@@ -124,7 +136,7 @@ class CoffeeUpdater(object):
                     print("No File...")
                     needUpdate = True
                 else:
-                    print("Got LocalFile : " + localFile)
+                    print("File already exists")
                     if localFile.Hash() != value["Hash"]:
                         print("Hash differs")
                         needUpdate = True
@@ -137,7 +149,22 @@ class CoffeeUpdater(object):
                         print ("Downloaded file looks good")
                     else:
                         print ("Dont update - corrupted download")
+                        needUpdate = False
                         
+                
+                if needUpdate:
+                    print("Updating...")
+                    with open(value["FileName"] + ".temp", "w") as file:
+                        print("Writing temp file")
+                        file.write(content.Content())
+                    
+                    if localFile != None:
+                        print("Orig file existed, removing it")
+                        os.remove(value["FileName"])
+                    
+                    print("Perform rename")
+                    os.rename(value["FileName"] + ".temp", value["FileName"])
+                    
 
             except OSError as e:
                 print("OSERROR() - download - reseting!")
@@ -153,7 +180,7 @@ class ChecksumContent(object):
         self.hexHash = self.hexHash.decode('utf-8')
         self.content = content
         
-        #print("HexHash " + self.hexHash)        
+        print("HexHash %s" % self.hexHash)        
         
     def Content(self):
         return self.content
@@ -172,7 +199,8 @@ class CoffeeFileDownloader(object):
             return None
         
         with open('DeviceConfig.json', 'r') as f:
-            return f.read()
+            ret = ChecksumContent(f.read())
+            return ret
         
     def LoadContent(self, location):
         print("Getting %s from FILESYSTEM" % location)
@@ -234,8 +262,7 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
             if self.wlan.isconnected():
                 print("GOOD: CONNECTED")
             else:
-                print("BAD: NOT CONNECTED")
-                
+                print("BAD: NOT CONNECTED")               
            
             
             print("Before Free mem:", gc.mem_free())
