@@ -107,20 +107,23 @@ class CoffeeUpdater(object):
 
     def Update(self):
         # Bootstrap ourselves with DeviceConfig on disk
-        f = self.downloader.LoadFile("DeviceConfig.json")
-        data = ujson.load(io.StringIO(f.Content()))
+        localConfig = self.downloader.LoadFile("DeviceConfig.json")
+        localConfigJson = ujson.load(io.StringIO(localConfig.Content()))
         
         # Retrieve our high water config file
-        f = self.downloader.LoadContent(data["DeviceFunction"])
+        f = self.downloader.LoadContent(localConfigJson["DeviceFunction"])
         data = ujson.load(io.StringIO(f.Content()))
                 
+        print(f.Content())
+        
         if f.Hash() == data["DeviceFunctionHash"]:
             print ("Downloaded file looks good")
         else:
             print ("ERROR: Dont update - corrupted download")
+            print ("Expected Hash: %s" % data["DeviceFunctionHash"])
+            print ("Actual Hash: %s" % f.Hash())
             return
-        
-               
+                       
         print("Function : %s" % data["DeviceFunction"])
         
         for key, value in enumerate(data['Files']):        

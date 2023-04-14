@@ -1,7 +1,7 @@
 {
   "Version":1,
   "DeviceFunction":"https://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WifiRelay.json",
-  "DeviceFunctionHash":"NEW",
+  "DeviceFunctionHash":"05e8683015c397932524b554d411db5baa57d94be519118a35d06308a04640d8",
   "Files":[
     {
       "URL":"http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py",
