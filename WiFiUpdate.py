@@ -316,9 +316,9 @@ except KeyboardInterrupt as e:
     #machine.reset()
 
 print("Blinking LEDs for a bit")
-for count in range(0,10):
+for count in range(0,100):
     fixedLed.toggle()
-    sleep(1)
+    sleep(0.5)
     
 print("Bye!! - xyz")
 sleep(5)
