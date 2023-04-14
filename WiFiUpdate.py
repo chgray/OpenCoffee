@@ -125,49 +125,53 @@ class CoffeeUpdater(object):
         #     print ("Actual Hash: %s" % targetConfig.Hash())
         #     return
                        
-        print("Function : %s" % targetConfigJson["DeviceFunction"])
+        print("Device Function : %s" % targetConfigJson["DeviceFunction"])
         
-        for key, value in enumerate(targetConfigJson['Files']):        
-            print ("URL=" + value["URL"])
-            print ("HASH=" + value["Hash"])
-            print ("FILENAME=" + value["FileName"])
+        for key, value in enumerate(targetConfigJson['Files']):    
+            print ("Updating: %s" % value["FileName"])    
+            print ("    URL=" + value["URL"])
+            print ("    EXPECTED_HASH=" + value["Hash"])
             
             try:
                 localFile = self.downloader.LoadFile(value["FileName"])
                 needUpdate = False
                 
                 if localFile == None:
-                    print("No File...")
+                    print("    LocalFile=FALSE;  forcing update")
                     needUpdate = True
                 else:
-                    print("File already exists")
+                    print("    LocalFile=TRUE;  checking hashs to see if update is needed")
                     if localFile.Hash() != value["Hash"]:
-                        print("Hash differs")
+                        print("    UPDATE REQUIRED;  hashes differ")
                         needUpdate = True
                 
                 if needUpdate:
+                    print("    DOWNLOADING %s" % value["URL"])
                     content = self.downloader.LoadContent(value["URL"])
-                    print("Loaded File with Hash : %s" % content.Hash())
-                
+                                    
                     if content.Hash() == value["Hash"]:
-                        print ("Downloaded file looks good")
+                        print ("    HASH of downloaded file verfied!")
                     else:
-                        print ("Dont update - corrupted download")
+                        print ("    HASH of downloaded file corrupted - corruption on the network, or with the configuration JSON")
+                        print ("    ACTUAL HASH : %s" % content.Hash())
                         needUpdate = False
                         
                 
                 if needUpdate:
-                    print("Updating...")
+                    print("")
+                    print("    Performing Update...")
                     with open(value["FileName"] + ".temp", "w") as file:
-                        print("Writing temp file")
+                        print("    Writing temp file")
                         file.write(content.Content())
                     
                     if localFile != None:
-                        print("Orig file existed, removing it")
+                        print("   Removing original file")
                         os.remove(value["FileName"])
                     
-                    print("Perform rename")
+                    print("    Perform rename")
                     os.rename(value["FileName"] + ".temp", value["FileName"])
+                    
+                    print("    SUCCESS: %s updated!" % value["FileName"])
                     
 
             except OSError as e:
@@ -178,13 +182,13 @@ class CoffeeUpdater(object):
 class ChecksumContent(object):
     
     def __init__(self, content):
-        print("ChecksumContent")
+        #print("ChecksumContent")
         self.shaHash = hashlib.sha256(content)
         self.hexHash = binascii.hexlify(self.shaHash.digest())
         self.hexHash = self.hexHash.decode('utf-8')
         self.content = content
         
-        print("HexHash %s" % self.hexHash)        
+        #print("HexHash %s" % self.hexHash)        
         
     def Content(self):
         return self.content
@@ -197,7 +201,7 @@ class CoffeeFileDownloader(object):
         print("OpenCoffee Downloader (FILE)")
         
     def LoadFile(self, location):
-        print("Getting %s from FILESYSTEM" % location)
+        #print("Getting %s from FILESYSTEM" % location)
         
         if fileExists(location) == False:
             return None
@@ -207,7 +211,7 @@ class CoffeeFileDownloader(object):
             return ret
         
     def LoadContent(self, location):
-        print("Getting %s from FILESYSTEM" % location)
+        #print("Getting %s from FILESYSTEM" % location)
         
         if fileExists(location) == False:
             return None
@@ -260,45 +264,11 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
             machine.reset()     
 
     def LoadContent(self, location):
-        print("Getting %s from WIFI" % location)
-        
-        try:
-            if self.wlan.isconnected():
-                print("GOOD: CONNECTED")
-            else:
-                print("BAD: NOT CONNECTED")               
-           
-            
-            print("Before Free mem:", gc.mem_free())
-            gc.enable()
-            gc.collect()
-            print("After Free mem:", gc.mem_free())
-
-            response = urequests.get(location)
-
-            #print(response.text)
-            hash_object = hashlib.sha256(response.text)
-            hex_dig = binascii.hexlify(hash_object.digest()) 
-            
-            print("Before close Free mem:", gc.mem_free())
-            #response.close() 
-            print("After close Free mem:", gc.mem_free())
-            gc.enable()
-            gc.collect()
-            print("After GC:", gc.mem_free())
-                    
-            ret = ChecksumContent(response.text)
-            #print(response.text)  
-             
-        except OSError as e:
-            print("OSERROR() - download - reseting!")
-            #machine.reset()
-
-        except KeyboardInterrupt as e:
-            print('Keyboard-Closing Up...')
-            print("KEYBOARDINTERRUPT() - reseting!")
-            #machine.reset()
-         
+        #print("Getting %s from WIFI" % location)                
+        response = urequests.get(location)
+        hash_object = hashlib.sha256(response.text)
+        hex_dig = binascii.hexlify(hash_object.digest())                     
+        ret = ChecksumContent(response.text)
         return ret
                 
 
