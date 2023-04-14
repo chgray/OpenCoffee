@@ -1,4 +1,5 @@
 import network, os
+import urequests, gc
 import socket
 import time
 import io
@@ -25,12 +26,12 @@ import urequests
 print ("Starting")
 
 fixedLed = Pin("LED", Pin.OUT)
-wdt = WDT(timeout=8000) #timeout is in ms
+#wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
-#fixedLed.value(1)
-#sleep(2)
-#fixedLed.value(0)
+fixedLed.value(1)
+sleep(1)
+fixedLed.value(0)
 
 uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
 uart.init(bits=8, parity=None, stop=2)
@@ -46,21 +47,22 @@ def fileExists(path):
         return False
 
 def pokeWatchDog():
-    global wdt
-    global fixedLed
-    global startTime
+    fixedLed.toggle()
+    #global wdt
+    #global fixedLed
+    #global startTime
     
-    if startTime + (6 * 60 *  1000) < time.ticks_ms():
-        print("RESETING")        
-        machine.reset()
+    #if startTime + (6 * 60 *  1000) < time.ticks_ms():
+    #    print("RESETING")        
+    #    machine.reset()
     
     #led = Pin("LED", Pin.OUT)
     #fixedLed.value(0)
     #sleep(1)
     #print("WatchDog Poke")
     #fixedLed.value(1)
-    wdt.feed() #resets countdown
-    
+    #wdt.feed() #resets countdown
+    #fixedLed.toggle()
 
 def pokeWatchDogTimer(t):
     #print("Watchdog Timer")
@@ -68,149 +70,10 @@ def pokeWatchDogTimer(t):
     pokeWatchDog()
 
 
-print("Initing Timer")
-timer.init(mode=Timer.PERIODIC, period=200, callback=pokeWatchDogTimer)
-print("...timer inited")
+#print("Initing Timer")
+#timer.init(mode=Timer.PERIODIC, period=200, callback=pokeWatchDogTimer)
+#print("...timer inited")
 
-class WifiLog(object):
-    m_connected = False
-    m_Exit = False
-
-    def close_connection(self):
-
-        if self.m_connected:
-            print("Closing Socket:")
-            self.m_socket.close()
-
-        self.m_connected = False
-
-    def close(self):
-        print("close() - reseting!")
-        machine.reset()
-        self.close_connection()
-
-
-        if self.m_Exit == False:
-            print("Disconnecting and deactivating wifi")
-            self.wlan.disconnect()
-            self.wlan.active(True)
-        self.m_Exit = True
-
-    def connect_thread(self):
-        fixedLed = Pin("LED", Pin.OUT)
-        try:
-            print("Getting Creds")
-            creds = WifiCreds
-            print ("Got Creds")
-            
-            while True:                    
-                print("Scanning:")
-
-                self.m_ssid = creds.SSID()
-                self.m_password = creds.PWD()
-                
-                print("SSID : %s" % self.m_ssid)
-                
-                pokeWatchDog()
-                scanlist = self.wlan.scan()
-
-                print("Got Scanlist")
-                for result in scanlist:
-                    ssid, bssid, channel, RSSI, authmode, hidden = result
-                    print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
-
-                print("Scan CompleteX")
-
-                pokeWatchDog()
-                print("Poked")
-                print("Connecting to %s" % self.m_ssid)
-                self.wlan.connect(self.m_ssid, self.m_password)
-                
-                while True:
-                    print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
-                    if self.wlan.status() < 0 or self.wlan.status() >= 3:
-                        break
-                    pokeWatchDog()
-                    time.sleep(1)
-
-                if self.wlan.isconnected():
-                    #fixedLed.value(1)
-                    print('connected')
-                    status = self.wlan.ifconfig()
-                    print( 'ip = ' + status[0] )
-                    uart.write('ip' + status[0])
-                else:
-                    print('network connection failed')
-                    continue
-
-                addr = socket.getaddrinfo('0.0.0.0', 25)[0][-1]
-                
-                # periodic at 1kHz
-                timer.init(mode=Timer.PERIODIC, period=2000, callback=pokeWatchDogTimer)
-                
-                print("Downloading")
-                url = "http://raw.githubusercontent.com/chgray/OpenCoffee/user/chgray/se2/WiFiUpdate.py"
-                response = urequests.get(url)
-                
-               
-
-                hash_object = hashlib.sha256(response.text)
-                hex_dig = binascii.hexlify(hash_object.digest())     
-                
-                if(fileExists("main.py")):
-                    f = open('main.py')
-                    orig_file = f.read()               
-                    f.close()
-                
-                    orig_hash_object = hashlib.sha256(orig_file)
-                    orig_hex_dig = binascii.hexlify(orig_hash_object.digest())
-                else:
-                    orig_hex_dig = "No File"
-                
-                print("Orig_Hex: %s" % orig_hex_dig)                
-                print(" New_Hex: %s" % hex_dig)
-                
-                print(response)
-                with open("main.py2", "w") as file:
-                    file.write(response.text)
-                
-                if(fileExists("main_old.py")):
-                    os.remove("main_old.py")
-                if(fileExists("main.py")):  
-                    os.rename("main.py", "main_old.py")
-                os.rename("main.py2", "main.py")
-                print("Downloaded and saved!")
-                
-                print("BYE")
-                
-                for y in range(0, 10):
-                    fixedLed.value(1)                    
-                    sleep(0.1)
-                    fixedLed.value(0)
-                    sleep(0.1)
-                    
-                machine.reset()
-            
-        except KeyboardInterrupt as e:
-            print("KEYBOARD INTERUPT!")
-            #self.close()
-        except OSError as e:
-                         
-            print(" Reseting...")
-            sys.print_exception(e)
-        	#machine.reset()
-
-    def __init__(self):
-        self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
-
-
-
-
-
-w = WifiLog()
-#w.log("hi")
-#w.connect_thread()
 
 
 
@@ -253,8 +116,50 @@ class CoffeeUpdater(object):
             print ("HASH=" + value["Hash"])
             print ("FILENAME=" + value["FileName"])
             
-            self.downloader.LoadContent(value["URL"])
-            #print(key, value)
+            try:
+                localFile = self.downloader.LoadFile(value["FileName"])
+                needUpdate = False
+                
+                if localFile == None:
+                    print("No File...")
+                    needUpdate = True
+                else:
+                    print("Got LocalFile : " + localFile)
+                    if localFile.Hash() != value["Hash"]:
+                        print("Hash differs")
+                        needUpdate = True
+                
+                if needUpdate:
+                    content = self.downloader.LoadContent(value["URL"])
+                    print("Loaded File with Hash : %s" % content.Hash())
+                
+                    if content.Hash() == value["Hash"]:
+                        print ("Downloaded file looks good")
+                    else:
+                        print ("Dont update - corrupted download")
+                        
+
+            except OSError as e:
+                print("OSERROR() - download - reseting!")
+                #machine.reset()
+
+
+class ChecksumContent(object):
+    
+    def __init__(self, content):
+        print("ChecksumContent")
+        self.shaHash = hashlib.sha256(content)
+        self.hexHash = binascii.hexlify(self.shaHash.digest())
+        self.hexHash = self.hexHash.decode('utf-8')
+        self.content = content
+        
+        #print("HexHash " + self.hexHash)        
+        
+    def Content(self):
+        return self.content
+        
+    def Hash(self):
+        return self.hexHash
 
 class CoffeeFileDownloader(object):
     def __init__(self):
@@ -262,42 +167,57 @@ class CoffeeFileDownloader(object):
         
     def LoadFile(self, location):
         print("Getting %s from FILESYSTEM" % location)
+        
+        if fileExists(location) == False:
+            return None
+        
         with open('DeviceConfig.json', 'r') as f:
             return f.read()
         
     def LoadContent(self, location):
         print("Getting %s from FILESYSTEM" % location)
-        with open('DeviceConfig.json', 'r') as f:
-            return f.read()
+        
+        if fileExists(location) == False:
+            return None
+        
+        with open(location, 'r') as f:
+            ret = ChecksumContent(f.read())
+            return ret
+
+
 
 class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
     def __init__(self):
         super().__init__()
         print("OpenCoffee Downloader (Wifi)")
+        
         self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
+        self.wlan.active(False)
+        
+        fixedLed.value(1)
+        sleep(1)
+        fixedLed.value(0)
         
     def Connect(self):
         creds = WifiCreds
         self.m_ssid = creds.SSID()
         self.m_password = creds.PWD()
-
-        print("SSID : %s" % self.m_ssid)
-    
-        scanlist = self.wlan.scan()
+        
+        # scanlist = self.wlan.scan()
+        # for result in scanlist:
+        #     ssid, bssid, channel, RSSI, authmode, hidden = result
+        #     print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
       
-        for result in scanlist:
-            ssid, bssid, channel, RSSI, authmode, hidden = result
-            print("     %s == %s,  authmode=%d" % (ssid, ubinascii.hexlify(bssid), authmode))
-      
-        print("Connecting to %s" % self.m_ssid)
+        print("Connecting to %s with password %s" % (self.m_ssid, self.m_password))
+       
+        self.wlan.active(True) 
+        fixedLed.value(1) 
+        sleep(3)       
         self.wlan.connect(self.m_ssid, self.m_password)
-
-        while True:
-            print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))
-            if self.wlan.status() < 0 or self.wlan.status() >= 3:
-                break
-            sleep(0.5)
+            
+        while self.wlan.isconnected() == False:
+            print('waiting for connection...  Status=%d, connected=%d' % (self.wlan.status(), self.wlan.isconnected()))    
+            sleep(1)
 
         if self.wlan.isconnected():
             print('connected')
@@ -305,39 +225,79 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
             print( 'ip = ' + status[0] )
         else:
             print('network connection failed')
-            machine.reset()      
-       
+            machine.reset()     
 
     def LoadContent(self, location):
         print("Getting %s from WIFI" % location)
+        
+        try:
+            if self.wlan.isconnected():
+                print("GOOD: CONNECTED")
+            else:
+                print("BAD: NOT CONNECTED")
+                
+           
+            
+            print("Before Free mem:", gc.mem_free())
+            gc.enable()
+            gc.collect()
+            print("After Free mem:", gc.mem_free())
+
+            response = urequests.get(location)
+
+            #print(response.text)
+            hash_object = hashlib.sha256(response.text)
+            hex_dig = binascii.hexlify(hash_object.digest()) 
+            
+            print("Before close Free mem:", gc.mem_free())
+            #response.close() 
+            print("After close Free mem:", gc.mem_free())
+            gc.enable()
+            gc.collect()
+            print("After GC:", gc.mem_free())
+                    
+            ret = ChecksumContent(response.text)
+            #print(response.text)  
+             
+        except OSError as e:
+            print("OSERROR() - download - reseting!")
+            #machine.reset()
+
+        except KeyboardInterrupt as e:
+            print('Keyboard-Closing Up...')
+            print("KEYBOARDINTERRUPT() - reseting!")
+            #machine.reset()
+         
+        return ret
+                
 
 #
 # On PicoW init wifi 
 #
 import network
 
-if hasattr(network, "WLAN"):
-    print("WIFI")
-    downloader = CoffeeFileDownloaderWifi()
-    downloader.Connect()
-else:
-    #downloader = CoffeeFileDownloader()
-    print("NOT WIFI DEVICE!!!! - EXITING")
-    exit(1)
 
+try:
+    if hasattr(network, "WLAN"):
+        print("WIFI")
+        downloader = CoffeeFileDownloaderWifi()
+        downloader.Connect()
+    else:
+        #downloader = CoffeeFileDownloader()
+        print("NOT WIFI DEVICE!!!! - EXITING")
+        exit(1)
 
-#downloader.LoadContent("DeviceConfig.json")
+    cu = CoffeeUpdater(downloader)
+    cu.Update()
+    
+except OSError as e:
+        print('Closing Up...')
+        print("OSERROR() - reseting!")
+        #machine.reset()
 
-cu = CoffeeUpdater(downloader)
-cu.Update()
-
-#try:
-#    ManageWifi()
-#except KeyboardInterrupt as e:
-#    w.close()
-
+except KeyboardInterrupt as e:
+    print('Keyboard-Closing Up...')
+    print("KEYBOARDINTERRUPT() - reseting!")
+    #machine.reset()
+        
 print("Bye!! - xyz")
-
-                        
-
-
