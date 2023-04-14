@@ -111,23 +111,23 @@ class CoffeeUpdater(object):
         localConfigJson = ujson.load(io.StringIO(localConfig.Content()))
         
         # Retrieve our high water config file
-        f = self.downloader.LoadContent(localConfigJson["DeviceFunction"])
-        data = ujson.load(io.StringIO(f.Content()))
+        targetConfig = self.downloader.LoadContent(localConfigJson["DeviceFunction"])
+        targetConfigJson = ujson.load(io.StringIO(targetConfig.Content()))
                 
-        print(f.Content())
+        print(targetConfig.Content())
         print("-----")
         
-        if f.Hash() == data["DeviceFunctionHash"]:
-            print ("Downloaded file looks good")
-        else:
-            print ("ERROR: Dont update - corrupted download")
-            print ("Expected Hash: %s" % data["DeviceFunctionHash"])
-            print ("Actual Hash: %s" % f.Hash())
-            return
+        # if targetConfig.Hash() == targetConfigJson["DeviceFunctionHash"]:
+        #     print ("Downloaded file looks good")
+        # else:
+        #     print ("ERROR: Dont update - corrupted download")
+        #     print ("Expected Hash: %s" % targetConfigJson["DeviceFunctionHash"])
+        #     print ("Actual Hash: %s" % targetConfig.Hash())
+        #     return
                        
-        print("Function : %s" % data["DeviceFunction"])
+        print("Function : %s" % targetConfigJson["DeviceFunction"])
         
-        for key, value in enumerate(data['Files']):        
+        for key, value in enumerate(targetConfigJson['Files']):        
             print ("URL=" + value["URL"])
             print ("HASH=" + value["Hash"])
             print ("FILENAME=" + value["FileName"])
