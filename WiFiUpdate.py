@@ -115,6 +115,7 @@ class CoffeeUpdater(object):
         data = ujson.load(io.StringIO(f.Content()))
                 
         print(f.Content())
+        print("-----")
         
         if f.Hash() == data["DeviceFunctionHash"]:
             print ("Downloaded file looks good")
