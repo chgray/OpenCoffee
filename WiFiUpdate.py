@@ -315,7 +315,9 @@ except KeyboardInterrupt as e:
     print("KEYBOARDINTERRUPT() - reseting!")
     #machine.reset()
 
-print("Bye!! - xyz")
-while True:
+for count in range(0,10):
     fixedLed.toggle()
-    sleep(0.25)
+    sleep(1)
+    
+print("Bye!! - xyz")
+machine.reset()
