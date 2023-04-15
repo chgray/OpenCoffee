@@ -280,26 +280,13 @@ class CoffeeSerialServer(object):
                 break
             else:                
                 rxData += self.uart.read(1)
-                #print("RXDataLen: %d of %d" % (len(rxData), rlen))
-                
-        #while True:            
-        #    rxData += self.uart.read(1)
-            #
-
-            # 
-            
-            
-            #if(self.uart.any)
-            #print("RXDataLen: %d of %d" % (len(rxData), rlen))
-            #time.sleep_ms(10)
+               
 
         reframe = False
         if(len(rxData) == rlen):
             unpacked_data = ustruct.unpack(fmt, rxData)
 
-            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[3] != 0xDDDDDDDD):
-                #print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
-            #else:
+            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[3] != 0xDDDDDDDD):               
                 print("CORRUPT PACKET - need REFRAME!")
                 reframe = True
         else:
@@ -314,8 +301,6 @@ class CoffeeSerialServer(object):
             self.SendHeader(-1, 0)
             return self.ReadPacket(id)
 
-        print("Got Packet!!")
-        #print(unpacked_data)
         return unpacked_data
 
 
@@ -383,13 +368,13 @@ class CoffeeSerialServer(object):
 print("Trying Serial")
 s = CoffeeSerialServer(0, 0, 1)
 s.SendHeader(-1, -1)
-s.ReadPacket(0)
+print(s.ReadPacket(0))
 s.SendHeader(-1, -1)
 print("---***---***---***---***")
-s.ReadPacket(0)
+print(s.ReadPacket(0))
 print("---***---***---***---***")
 s.SendHeader(-1, -1)
-s.ReadPacket(0)
+print(s.ReadPacket(0))
 
         # while True:
         #     fmt = 'iii'
