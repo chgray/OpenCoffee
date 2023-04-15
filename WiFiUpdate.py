@@ -274,11 +274,25 @@ class CoffeeSerialServer(object):
     def SendPacket(self, opCode, data):
         return SendHeader(opCode, 0)
     
+    def ProcessPacket(self, packet):
+        print("Processing Packet" + str(packet))
+    
     def Process(self):
         if(self.uart.any() != 0):
             p = self.ReadPacket()
             print("Got Packet : ID=%d" % p.PacketId())
-        
+            self.ProcessPacket(p)
+      
+    def ProcessUntil(self, packetId):
+        while True:
+            if(self.uart.any() == 0):
+                time.sleep_ms(1)
+                continue
+                
+            p = self.ReadPacket()
+            print("Got Packet : ID=%d" % p.PacketId())  
+            if(p.PacketId == packetId):
+                return p
             
         
     def SendHeader(self, opCode, len):
