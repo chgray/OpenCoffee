@@ -249,31 +249,96 @@ class CoffeeSerialServer(object):
 
     def SendHeader(self, opCode, len):
         print("Sending Alignment Packet")
-        fmt = 'iiii'
+        fmt = 'IIII'
         rlen = ustruct.calcsize(fmt)
         buf = bytearray(rlen)
         print("    size=%d" % rlen)
         ustruct.pack_into(fmt, buf, 0, 0xAAAAAAAA, opCode, len, 0xDDDDDDDD)
         self.uart.write(buf)
 
+    def ReadPacket(self, id):
+        print("Reading Packet %d" % id)
+
+        # Read one byte;  the rest of our header
+        fmt = 'IIII'
+        rlen = ustruct.calcsize(fmt)        
+        rxData = bytes()          
+        startRead = time.ticks_ms()          
+        while True:
+            if(self.uart.any() == 0):
+                 if(time.ticks_ms() - startRead > 1000):
+                    print("TIMING OUT")
+                    self.Align()
+                    print("...reading again")
+                    self.SendHeader(1,2)
+                    return self.ReadPacket(id)
+                 
+                 time.sleep_ms(1)
+                 continue
+            
+            if len(rxData) == rlen:                
+                break
+            else:                
+                rxData += self.uart.read(1)
+                #print("RXDataLen: %d of %d" % (len(rxData), rlen))
+                
+        #while True:            
+        #    rxData += self.uart.read(1)
+            #
+
+            # 
+            
+            
+            #if(self.uart.any)
+            #print("RXDataLen: %d of %d" % (len(rxData), rlen))
+            #time.sleep_ms(10)
+
+        reframe = False
+        if(len(rxData) == rlen):
+            unpacked_data = ustruct.unpack(fmt, rxData)
+
+            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[3] != 0xDDDDDDDD):
+                #print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
+            #else:
+                print("CORRUPT PACKET - need REFRAME!")
+                reframe = True
+        else:
+            print("ERROR: short read")
+            reframe = True
+
+
+        if(reframe):
+            print("ERROR: Reframing Packet!")
+            self.SendHeader(-1, 0)
+            self.Align()
+            self.SendHeader(-1, 0)
+            return self.ReadPacket(id)
+
+        print("Got Packet!!")
+        #print(unpacked_data)
+        return unpacked_data
+
 
     #https://docs.micropython.org/en/latest/library/struct.html
     def Align(self):
         print("Aligning")
+        self.SendHeader(-1, 0)
+        self.SendHeader(-1, 0)
+        
         while True:
             fmt = 'B'
             rlen = ustruct.calcsize(fmt)
-            
+
             # Read one byte;  looking for 0xFF
             rxData = bytes()
             hits = 0
-            while self.uart.any() != 0:               
+            while self.uart.any() != 0:
                 rxData += self.uart.read(1)
-                print("RXDataLen: %d of %d" % (len(rxData), rlen))
+                #print("RXDataLen: %d of %d" % (len(rxData), rlen))
                 time.sleep_ms(1)
-                        
-                unpacked_data = ustruct.unpack(fmt, rxData)                
-                print(unpacked_data[0])  
+
+                unpacked_data = ustruct.unpack(fmt, rxData)
+                print(unpacked_data[0])
                 if unpacked_data[0] != 0xAA and hits == 4:
                     print("Found end of marker")
                     break
@@ -285,35 +350,46 @@ class CoffeeSerialServer(object):
                     print("Not end of marker")
                     hits = 0
                     rxData = bytes()
-                    self.SendHeader(-1, 0)
-                
+
             print("GOOD")
-            
+
              # Read one byte;  the rest of our header
             fmt = 'III'
-            rlen = ustruct.calcsize(fmt)  
-            while self.uart.any() != 0 and len(rxData) < rlen:                
+            rlen = ustruct.calcsize(fmt)
+            while self.uart.any() != 0 and len(rxData) < rlen:
                 rxData += self.uart.read(1)
-                print("RXDataLen: %d of %d" % (len(rxData), rlen))
+                #print("RXDataLen: %d of %d" % (len(rxData), rlen))
                 time.sleep_ms(10)
-               
-            print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
-            unpacked_data = ustruct.unpack(fmt, rxData)                
-            print(unpacked_data) 
-            return
-             
-            # if unpacked_data[0] == 0xFF:
-            #    print("MISS!")  
-            #    continue   
-            
 
-           
+            #print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
+            unpacked_data = ustruct.unpack(fmt, rxData)
+            print(unpacked_data)
+            if(unpacked_data[2] != 0xDDDDDDDD):
+                print("TAIL OF HEADER BAD - aligning again")                
+                return self.Align()
+
+            print(unpacked_data)
+            print("**ALIGNED!!")
+            return
+
+            # if unpacked_data[0] == 0xFF:
+            #    print("MISS!")
+            #    continue
+
+
+
 
 
 print("Trying Serial")
 s = CoffeeSerialServer(0, 0, 1)
-s.Align()
-
+s.SendHeader(-1, -1)
+s.ReadPacket(0)
+s.SendHeader(-1, -1)
+print("---***---***---***---***")
+s.ReadPacket(0)
+print("---***---***---***---***")
+s.SendHeader(-1, -1)
+s.ReadPacket(0)
 
         # while True:
         #     fmt = 'iii'
