@@ -129,7 +129,6 @@ class CoffeeUpdater(object):
                         print ("    ACTUAL HASH : %s" % content.Hash())
                         needUpdate = False
 
-
                 if needUpdate:
                     print("")
                     print("    Performing Update...")
@@ -244,13 +243,43 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
 
 class CoffeeCommands():
     RETRANSMIT = 1
-    bee = 2
-    cat = 3
-    dog = 4
+    GET_FILE = 2
+    
+    
+class CoffeePacket(object):
+    
+    def __init__(self, opCode, packetID, len, data):
+        self.OpCode = opCode
+        self.PacketId = packetID
+        self.Length = len
+        self.Data = data
+    
+    def __str__(self):
+        oc = self.OpCode
+        ret = "CoffeePacket: OpCode={opCode}, PacketId={pID}".format(opCode=oc, pID=self.PacketId)
+        return ret
+        
+    def OpCode(self):
+        return self.OpCode
+    
+    def PacketId(self):
+        return self.PacketId
+    
 class CoffeeSerialServer(object):
     def __init__(self, uartNum, txPin, rxPin):
         self.uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
         self.uart.write("Hi") # <-- this intentionally puts us 2 bytes offset, so we can test the code to align()
+        
+        
+    def SendPacket(self, opCode, data):
+        return SendHeader(opCode, 0)
+    
+    def Process(self):
+        if(self.uart.any() != 0):
+            p = self.ReadPacket()
+            print("Got Packet : ID=%d" % p.PacketId())
+        
+            
         
     def SendHeader(self, opCode, len):
         fmt = 'IIII'
@@ -262,9 +291,7 @@ class CoffeeSerialServer(object):
     def SendRetransmitRequest(self):
         return self.SendHeader(CoffeeCommands.RETRANSMIT, 0)
         
-    def ReadPacket(self, id):
-        print("Reading Packet %d" % id)
-
+    def ReadPacket(self):
         # Read one byte;  the rest of our header
         fmt = 'IIII'
         rlen = ustruct.calcsize(fmt)        
@@ -280,7 +307,7 @@ class CoffeeSerialServer(object):
                     self.Align()
                     print("...reading again")
                     self.SendRetransmitRequest()
-                    return self.ReadPacket(id)
+                    return self.ReadPacket()
                  
                  time.sleep_ms(1)
                  continue
@@ -307,10 +334,12 @@ class CoffeeSerialServer(object):
             self.SendRetransmitRequest()
             self.Align()
             self.SendRetransmitRequest()
-            return self.ReadPacket(id)
+            return self.ReadPacket()
 
-        return unpacked_data
-
+        #print(unpacked_data)
+        #print(".....")
+        ret = CoffeePacket(unpacked_data[1], 80, unpacked_data[2], 0)
+        return ret
 
     #https://docs.micropython.org/en/latest/library/struct.html
     def Align(self):
@@ -376,13 +405,13 @@ class CoffeeSerialServer(object):
 print("Trying Serial")
 s = CoffeeSerialServer(0, 0, 1)
 s.SendRetransmitRequest()
-print(s.ReadPacket(0))
+print(str(s.ReadPacket()))
 s.SendRetransmitRequest()
 print("---***---***---***---***")
-print(s.ReadPacket(0))
+print(str(s.ReadPacket()))
 print("---***---***---***---***")
 s.SendRetransmitRequest()
-print(s.ReadPacket(0))
+print(str(s.ReadPacket()))
 
         # while True:
         #     fmt = 'iii'
