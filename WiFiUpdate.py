@@ -1,44 +1,40 @@
 import network, os
-import urequests, gc
-import socket
+import urequests
+import ustruct
 import time
 import io
-import ubinascii
 import hashlib
 import binascii
-import sys
-import _thread
+import time
+import machine
+import ujson
+
 from WifiCreds import *
-
-#hi
-
 from machine import UART
 from machine import Pin, Timer
 from machine import Pin, Timer
-import time
-
-import machine, onewire, ds18x20, select
-
 from time import sleep
 from machine import Pin
-
-from machine import WDT
-import urequests
-
-print ("Starting")
 
 fixedLed = Pin("LED", Pin.OUT)
 #wdt = WDT(timeout=8000) #timeout is in ms
 timer = Timer()
 
-
 fixedLed.value(1)
 sleep(1)
 fixedLed.value(0)
 
-uart = UART(1, baudrate=9600, tx=Pin(4), rx=Pin(5))
-uart.init(bits=8, parity=None, stop=2)
 
+# class CoffeeSerialServer(object):
+#     def __init__(self, uartNum, txPin, rxPin):
+#         uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
+#         uart.irq(UART.RX_ANY, priority=1, handler=None, wake=machine.IDLE)
+
+#     def callback
+
+def callback(data):
+    print("INTERRUPT")
+    print(data)
 
 startTime = time.ticks_ms()
 
@@ -78,30 +74,9 @@ def pokeWatchDogTimer(t):
 #print("...timer inited")
 
 
-
-
-def ManageWifi():
-    try:
-        print("Starting connect thread")
-        w.connect_thread()
-        print("Wifi Gone")
-    except OSError as e:
-        w.close()
-        print('Closing Up...')
-        print("OSERROR() - reseting!")
-        #machine.reset()
-
-    except KeyboardInterrupt as e:
-        w.close()
-        print('Keyboard-Closing Up...')
-        print("KEYBOARDINTERRUPT() - reseting!")
-        #machine.reset()
-
-
 #
 # Read update file
 #
-import ujson
 class CoffeeUpdater(object):
 
     def __init__(self, downloader):
@@ -109,31 +84,16 @@ class CoffeeUpdater(object):
         self.downloader = downloader
 
     def Update(self):
-        # Bootstrap ourselves with DeviceConfig on disk
-        #localConfig = self.downloader.LoadFile("DeviceConfig.json")
-        #localConfigJson = ujson.load(io.StringIO(localConfig.Content()))
-
         creds = WifiCreds()
         print("Got creds : %s" % creds.DeviceFunction())
 
         # Retrieve our high water config file
         targetConfig = self.downloader.LoadContent(creds.DeviceFunction())
-        #targetConfig = self.downloader.LoadContent(localConfigJson["DeviceFunction"])
-
         print("Downloaded...")
 
         targetConfigJson = ujson.load(io.StringIO(targetConfig.Content()))
 
         print(targetConfig.Content())
-        print("-----")
-
-        # if targetConfig.Hash() == targetConfigJson["DeviceFunctionHash"]:
-        #     print ("Downloaded file looks good")
-        # else:
-        #     print ("ERROR: Dont update - corrupted download")
-        #     print ("Expected Hash: %s" % targetConfigJson["DeviceFunctionHash"])
-        #     print ("Actual Hash: %s" % targetConfig.Hash())
-        #     return
 
         print("Device Function : %s" % targetConfigJson["DeviceFunction"])
 
@@ -191,7 +151,6 @@ class CoffeeUpdater(object):
                 print("OSERROR() - download - reseting!")
                 #machine.reset()
 
-
 class ChecksumContent(object):
 
     def __init__(self, content):
@@ -233,8 +192,6 @@ class CoffeeFileDownloader(object):
         with open(location, 'rb') as f:
             ret = ChecksumContent(f.read())
             return ret
-
-
 
 class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
     def __init__(self):
@@ -285,13 +242,105 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
         ret = ChecksumContent(response.text)
         return ret
 
+class CoffeeSerialServer(object):
+    def __init__(self, uartNum, txPin, rxPin):
+        self.uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
+        self.uart.write("Hi")
+
+    def SendHeader(self, opCode, len):
+        print("Sending Alignment Packet")
+        fmt = 'iiii'
+        rlen = ustruct.calcsize(fmt)
+        buf = bytearray(rlen)
+        print("    size=%d" % rlen)
+        ustruct.pack_into(fmt, buf, 0, 0xAAAAAAAA, opCode, len, 0xDDDDDDDD)
+        self.uart.write(buf)
+
+
+    #https://docs.micropython.org/en/latest/library/struct.html
+    def Align(self):
+        print("Aligning")
+        while True:
+            fmt = 'B'
+            rlen = ustruct.calcsize(fmt)
+            
+            # Read one byte;  looking for 0xFF
+            rxData = bytes()
+            hits = 0
+            while self.uart.any() != 0:               
+                rxData += self.uart.read(1)
+                print("RXDataLen: %d of %d" % (len(rxData), rlen))
+                time.sleep_ms(1)
+                        
+                unpacked_data = ustruct.unpack(fmt, rxData)                
+                print(unpacked_data[0])  
+                if unpacked_data[0] != 0xAA and hits == 4:
+                    print("Found end of marker")
+                    break
+                elif unpacked_data[0] == 0xAA:
+                    print("HIT! %d" % hits)
+                    rxData = bytes()
+                    hits = hits + 1
+                else:
+                    print("Not end of marker")
+                    hits = 0
+                    rxData = bytes()
+                    self.SendHeader(-1, 0)
+                
+            print("GOOD")
+            
+             # Read one byte;  the rest of our header
+            fmt = 'III'
+            rlen = ustruct.calcsize(fmt)  
+            while self.uart.any() != 0 and len(rxData) < rlen:                
+                rxData += self.uart.read(1)
+                print("RXDataLen: %d of %d" % (len(rxData), rlen))
+                time.sleep_ms(10)
+               
+            print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
+            unpacked_data = ustruct.unpack(fmt, rxData)                
+            print(unpacked_data) 
+            return
+             
+            # if unpacked_data[0] == 0xFF:
+            #    print("MISS!")  
+            #    continue   
+            
+
+           
+
+
+print("Trying Serial")
+s = CoffeeSerialServer(0, 0, 1)
+s.Align()
+
+
+        # while True:
+        #     fmt = 'iii'
+        #     rlen = ustruct.calcsize(fmt)
+        #     buf = bytearray(rlen)
+        #     ustruct.pack_into(fmt, buf, 0, 8080, 0, 1)
+
+        #     sleep(1)
+        #     print("Sending %d" % len(buf))
+        #     uart.write(buf)
+        #     sleep(1)
+
+        #     rxData = bytes()
+        #     while uart.any() != 0:
+        #         rxData += uart.read(1)
+        #         #print("LEFT: %d, total: %d" % (uart.any(),len(rxData)))
+        #         time.sleep_ms(1)
+
+        #     unpacked_data = ustruct.unpack('iii', rxData)
+        #     print(unpacked_data)
+        #     print("Tick")
+
+
 
 #
 # On PicoW init wifi
 #
-import network
-
-
 try:
     if hasattr(network, "WLAN"):
         print("WIFI")
@@ -319,7 +368,7 @@ print("Blinking LEDs for a bit")
 for count in range(0,100):
     fixedLed.toggle()
     sleep(0.5)
-    
+sleep(1)
 print("Bye!! - xyz")
 sleep(5)
 machine.reset()
