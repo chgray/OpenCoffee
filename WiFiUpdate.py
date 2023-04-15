@@ -265,6 +265,9 @@ class CoffeeSerialServer(object):
         rxData = bytes()          
         startRead = time.ticks_ms()          
         while True:
+            if len(rxData) == rlen:                
+                break
+             
             if(self.uart.any() == 0):
                  if(time.ticks_ms() - startRead > 1000):
                     print("TIMING OUT")
@@ -276,9 +279,8 @@ class CoffeeSerialServer(object):
                  time.sleep_ms(1)
                  continue
             
-            if len(rxData) == rlen:                
-                break
-            else:                
+            else:     
+                #print("RXDataLen: %d of %d" % (len(rxData), rlen))           
                 rxData += self.uart.read(1)
                
 
