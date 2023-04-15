@@ -242,20 +242,26 @@ class CoffeeFileDownloaderWifi(CoffeeFileDownloader):
         ret = ChecksumContent(response.text)
         return ret
 
+class CoffeeCommands():
+    RETRANSMIT = 1
+    bee = 2
+    cat = 3
+    dog = 4
 class CoffeeSerialServer(object):
     def __init__(self, uartNum, txPin, rxPin):
         self.uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
-        self.uart.write("Hi")
-
+        self.uart.write("Hi") # <-- this intentionally puts us 2 bytes offset, so we can test the code to align()
+        
     def SendHeader(self, opCode, len):
-        print("Sending Alignment Packet")
         fmt = 'IIII'
         rlen = ustruct.calcsize(fmt)
         buf = bytearray(rlen)
-        print("    size=%d" % rlen)
         ustruct.pack_into(fmt, buf, 0, 0xAAAAAAAA, opCode, len, 0xDDDDDDDD)
         self.uart.write(buf)
 
+    def SendRetransmitRequest(self):
+        return self.SendHeader(CoffeeCommands.RETRANSMIT, 0)
+        
     def ReadPacket(self, id):
         print("Reading Packet %d" % id)
 
@@ -273,7 +279,7 @@ class CoffeeSerialServer(object):
                     print("TIMING OUT")
                     self.Align()
                     print("...reading again")
-                    self.SendHeader(1,2)
+                    self.SendRetransmitRequest()
                     return self.ReadPacket(id)
                  
                  time.sleep_ms(1)
@@ -298,9 +304,9 @@ class CoffeeSerialServer(object):
 
         if(reframe):
             print("ERROR: Reframing Packet!")
-            self.SendHeader(-1, 0)
+            self.SendRetransmitRequest()
             self.Align()
-            self.SendHeader(-1, 0)
+            self.SendRetransmitRequest()
             return self.ReadPacket(id)
 
         return unpacked_data
@@ -309,8 +315,8 @@ class CoffeeSerialServer(object):
     #https://docs.micropython.org/en/latest/library/struct.html
     def Align(self):
         print("Aligning")
-        self.SendHeader(-1, 0)
-        self.SendHeader(-1, 0)
+        self.SendRetransmitRequest()
+        self.SendRetransmitRequest()
         
         while True:
             fmt = 'B'
@@ -369,13 +375,13 @@ class CoffeeSerialServer(object):
 
 print("Trying Serial")
 s = CoffeeSerialServer(0, 0, 1)
-s.SendHeader(-1, -1)
+s.SendRetransmitRequest()
 print(s.ReadPacket(0))
-s.SendHeader(-1, -1)
+s.SendRetransmitRequest()
 print("---***---***---***---***")
 print(s.ReadPacket(0))
 print("---***---***---***---***")
-s.SendHeader(-1, -1)
+s.SendRetransmitRequest()
 print(s.ReadPacket(0))
 
         # while True:
