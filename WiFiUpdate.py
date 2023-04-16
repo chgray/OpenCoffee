@@ -338,35 +338,18 @@ class CoffeeSerialServer(object):
         return self.SendPacket(CoffeeCommands.RETRANSMIT, 0)        
         
     def ReadPacket(self):
-        # Read one byte;  the rest of our header
         fmt = 'IIIII'
-        rlen = ustruct.calcsize(fmt)        
-        rxData = bytes()          
-        startRead = time.ticks_ms()          
-        while True:
-            if len(rxData) == rlen:                
-                break
-             
-            if(self.uart.any() == 0):
-                if(time.ticks_ms() - startRead > 1000):
-                   print("TIMING OUT")
-                   self.Align()
-                   print("...reading again")
-                   self.SendRetransmitRequest()
-                   return self.ReadPacket()
-                 
-                time.sleep_ms(1)
-                continue            
-            else:     
-                #print("RXDataLen: %d of %d" % (len(rxData), rlen))           
-                rxData += self.uart.read(1)
+        rlen = ustruct.calcsize(fmt)         
+        rxData = self.SerialReadBytes(rlen)        
                
-
+        if(rxData == None):
+            print("ERROR: failed read")
+            return self.RealignProcedure()
+               
         if(len(rxData) != rlen):
             print("ERROR: short read")
             return self.RealignProcedure()
-        
-        
+                
         unpacked_data = ustruct.unpack(fmt, rxData)
         if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[4] != 0xDDDDDDDD):               
             print("CORRUPT PACKET - need REFRAME!")
@@ -375,12 +358,12 @@ class CoffeeSerialServer(object):
     
         opCode = unpacked_data[1]
         packetId = unpacked_data[2]
-        packetLength = unpacked_data[3]
+        dataLength = unpacked_data[3]
 
         if opCode == CoffeeCommands.RETRANSMIT:        
-            ret = CoffeePacket_RETRANSMIT(packetId, packetLength, 0)
+            ret = CoffeePacket_RETRANSMIT(packetId, dataLength, 0)
         else:
-            ret = CoffeePacket_GET_FILE(packetId, packetLength, 0)
+            ret = CoffeePacket_GET_FILE(packetId, dataLength, 0)
 
         return ret
 
@@ -390,6 +373,27 @@ class CoffeeSerialServer(object):
         self.Align()
         self.SendRetransmitRequest()
         return self.ReadPacket()
+    
+    def SerialReadBytes(self, numBytes):
+        rxData = bytes()          
+        startRead = time.ticks_ms() 
+        while True:
+            if len(rxData) == numBytes:                
+                break
+             
+            if(self.uart.any() == 0):
+                if(time.ticks_ms() - startRead > 1000):
+                   print("TIMING OUT")
+                   return None
+                 
+                time.sleep_ms(1)
+                continue            
+            else:     
+                #print("RXDataLen: %d of %d" % (len(rxData), rlen))           
+                rxData += self.uart.read(1)
+                startRead = time.ticks_ms() 
+                
+        return rxData
 
     #https://docs.micropython.org/en/latest/library/struct.html
     def Align(self):
