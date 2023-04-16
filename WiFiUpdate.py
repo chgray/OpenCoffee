@@ -269,18 +269,21 @@ class CoffeeSerialServer(object):
     def __init__(self, uartNum, txPin, rxPin):
         self.uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
         self.uart.write("Hi") # <-- this intentionally puts us 2 bytes offset, so we can test the code to align()
+        self.CurrentPacketID = 0
         
-        
-    def SendPacket(self, opCode, data):
-        return SendHeader(opCode, 0)
-    
     def ProcessPacket(self, packet):
         print("Processing Packet" + str(packet))
+        
+        if(packet.OpCode == CoffeeCommands.RETRANSMIT):
+            print("RETRANSMIT REQUESTED")
+        elif(packet.OpCode == CoffeeCommands.GET_FILE):
+            print("GET_FILE")
+        #self.uart.write("X")
     
     def Process(self):
-        if(self.uart.any() != 0):
+        while (self.uart.any() != 0):
             p = self.ReadPacket()
-            print("Got Packet : ID=%d" % p.PacketId())
+            print("Got Packet : ID=%d" % p.PacketId)
             self.ProcessPacket(p)
       
     def ProcessUntil(self, packetId):
@@ -290,24 +293,40 @@ class CoffeeSerialServer(object):
                 continue
                 
             p = self.ReadPacket()
-            print("Got Packet : ID=%d" % p.PacketId())  
+            print("Got Packet : ID=%d" % p.PacketId)  
             if(p.PacketId == packetId):
                 return p
             
-        
-    def SendHeader(self, opCode, len):
-        fmt = 'IIII'
+    def SendPacket(self, opCode, data):
+               
+        if(opCode == CoffeeCommands.RETRANSMIT):
+            myId = -1
+        else:
+            myId = self.CurrentPacketID
+            self.CurrentPacketID = self.CurrentPacketID + 1            
+            self.previousCommandOpCode = opCode
+            self.previousCommandData = data
+            self.previousCommandID = myId
+            
+        return self.SendHeader(opCode, myId, 0)  
+    
+    def SendHeader(self, opCode, id, len):
+        fmt = 'IIIII'
         rlen = ustruct.calcsize(fmt)
         buf = bytearray(rlen)
-        ustruct.pack_into(fmt, buf, 0, 0xAAAAAAAA, opCode, len, 0xDDDDDDDD)
+        ustruct.pack_into(fmt, buf, 0, 0xAAAAAAAA, opCode, id, len, 0xDDDDDDDD)
         self.uart.write(buf)
+        return id
+
+    def RequestFile(self, fileName):
+        return self.SendPacket(CoffeeCommands.GET_FILE, 0)
 
     def SendRetransmitRequest(self):
-        return self.SendHeader(CoffeeCommands.RETRANSMIT, 0)
+        return self.SendPacket(CoffeeCommands.RETRANSMIT, 0)        
         
     def ReadPacket(self):
         # Read one byte;  the rest of our header
-        fmt = 'IIII'
+        fmt = 'IIIII'
         rlen = ustruct.calcsize(fmt)        
         rxData = bytes()          
         startRead = time.ticks_ms()          
@@ -335,8 +354,9 @@ class CoffeeSerialServer(object):
         if(len(rxData) == rlen):
             unpacked_data = ustruct.unpack(fmt, rxData)
 
-            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[3] != 0xDDDDDDDD):               
+            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[4] != 0xDDDDDDDD):               
                 print("CORRUPT PACKET - need REFRAME!")
+                print(unpacked_data)
                 reframe = True
         else:
             print("ERROR: short read")
@@ -352,7 +372,7 @@ class CoffeeSerialServer(object):
 
         #print(unpacked_data)
         #print(".....")
-        ret = CoffeePacket(unpacked_data[1], 80, unpacked_data[2], 0)
+        ret = CoffeePacket(unpacked_data[1], unpacked_data[2], unpacked_data[3], 0)
         return ret
 
     #https://docs.micropython.org/en/latest/library/struct.html
@@ -390,7 +410,7 @@ class CoffeeSerialServer(object):
             print("GOOD")
 
              # Read one byte;  the rest of our header
-            fmt = 'III'
+            fmt = 'IIII'
             rlen = ustruct.calcsize(fmt)
             while self.uart.any() != 0 and len(rxData) < rlen:
                 rxData += self.uart.read(1)
@@ -400,7 +420,7 @@ class CoffeeSerialServer(object):
             #print("Finished Reading DataLen: %d (left=%d)" % (len(rxData), self.uart.any()))
             unpacked_data = ustruct.unpack(fmt, rxData)
             print(unpacked_data)
-            if(unpacked_data[2] != 0xDDDDDDDD):
+            if(unpacked_data[3] != 0xDDDDDDDD):
                 print("TAIL OF HEADER BAD - aligning again")                
                 return self.Align()
 
@@ -418,14 +438,12 @@ class CoffeeSerialServer(object):
 
 print("Trying Serial")
 s = CoffeeSerialServer(0, 0, 1)
-s.SendRetransmitRequest()
-print(str(s.ReadPacket()))
-s.SendRetransmitRequest()
-print("---***---***---***---***")
-print(str(s.ReadPacket()))
-print("---***---***---***---***")
-s.SendRetransmitRequest()
-print(str(s.ReadPacket()))
+
+while True:
+    s.RequestFile("main.py")
+    s.Process()
+
+
 
         # while True:
         #     fmt = 'iii'
