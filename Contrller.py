@@ -76,7 +76,7 @@ dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
 SetMotorPercent(0)
 
 heater = Pin(26, Pin.OUT)
-button = Pin(0, Pin.IN, Pin.PUrrLL_DOWN)
+button = Pin(0, Pin.IN, Pin.PULL_DOWN)
 timer = Timer()
 
 uart.write("heater and buttons setup")
@@ -89,7 +89,7 @@ def fileExists(path):
         os.stat(path)
         return True
     except OSError:
-        return False
+            return False
         
 
 def simulate_temp_change(timer):
@@ -156,7 +156,7 @@ def LoadConfigFile():
         p = 0.1 #pX / 100
         i = 0
         d = 1
-        goalTemp = 1044
+        goalTemp = 104.4
 
 
 so = Pin(17, Pin.IN)
@@ -502,10 +502,10 @@ try:
             gt = (float)(goalTemp)
             
             if 0 == mode:
-                lcd_write(0, 0, ('PreInfuse: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 0, ('Pre%d/%d(C)' % (temp, gt)))
                 lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
             if 1 == mode:                
-                lcd_write(0, 0, ('Pull: %d/%d(C)' % (temp, gt)))
+                lcd_write(0, 0, ('Pull%d/%d(C)' % (temp, gt)))
                 lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
             if 2 == mode:
                 lcd_write(0, 0, ('NOT-IMPL Steam %d/%d(C)' % (temp, gt)))
