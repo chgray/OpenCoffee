@@ -245,9 +245,7 @@ class CoffeeCommands():
     RETRANSMIT = 1
     GET_FILE = 2
     
-    
 class CoffeePacket(object):
-    
     def __init__(self, opCode, packetID, len, data):
         self.OpCode = opCode
         self.PacketId = packetID
@@ -265,6 +263,21 @@ class CoffeePacket(object):
     def PacketId(self):
         return self.PacketId
     
+class CoffeePacket_RETRANSMIT(CoffeePacket):
+    def __init__(self, packetID, len, data):
+        super().__init__(CoffeeCommands.RETRANSMIT, packetID, len, data)
+        print("CONSTRUCTED RETRANSMIT")
+    def OpCode(self):
+        return CoffeeCommands.RETRANSMIT
+
+class CoffeePacket_GET_FILE(CoffeePacket):
+    def __init__(self, packetID, len, data):
+        super().__init__(CoffeeCommands.GET_FILE, packetID, len, data)
+        print("CONSTRUCTED GET_FILE")
+        
+    def OpCode(self):
+        return CoffeeCommands.GET_FILE
+
 class CoffeeSerialServer(object):
     def __init__(self, uartNum, txPin, rxPin):
         self.uart = UART(uartNum, baudrate=115200, tx=Pin(txPin), rx=Pin(rxPin))
@@ -335,45 +348,48 @@ class CoffeeSerialServer(object):
                 break
              
             if(self.uart.any() == 0):
-                 if(time.ticks_ms() - startRead > 1000):
-                    print("TIMING OUT")
-                    self.Align()
-                    print("...reading again")
-                    self.SendRetransmitRequest()
-                    return self.ReadPacket()
+                if(time.ticks_ms() - startRead > 1000):
+                   print("TIMING OUT")
+                   self.Align()
+                   print("...reading again")
+                   self.SendRetransmitRequest()
+                   return self.ReadPacket()
                  
-                 time.sleep_ms(1)
-                 continue
-            
+                time.sleep_ms(1)
+                continue            
             else:     
                 #print("RXDataLen: %d of %d" % (len(rxData), rlen))           
                 rxData += self.uart.read(1)
                
 
-        reframe = False
-        if(len(rxData) == rlen):
-            unpacked_data = ustruct.unpack(fmt, rxData)
-
-            if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[4] != 0xDDDDDDDD):               
-                print("CORRUPT PACKET - need REFRAME!")
-                print(unpacked_data)
-                reframe = True
-        else:
+        if(len(rxData) != rlen):
             print("ERROR: short read")
-            reframe = True
+            return self.RealignProcedure()
+        
+        
+        unpacked_data = ustruct.unpack(fmt, rxData)
+        if(unpacked_data[0] != 0xAAAAAAAA or unpacked_data[4] != 0xDDDDDDDD):               
+            print("CORRUPT PACKET - need REFRAME!")
+            print(unpacked_data)
+            return self.RealignProcedure()
+    
+        opCode = unpacked_data[1]
+        packetId = unpacked_data[2]
+        packetLength = unpacked_data[3]
 
+        if opCode == CoffeeCommands.RETRANSMIT:        
+            ret = CoffeePacket_RETRANSMIT(packetId, packetLength, 0)
+        else:
+            ret = CoffeePacket_GET_FILE(packetId, packetLength, 0)
 
-        if(reframe):
-            print("ERROR: Reframing Packet!")
-            self.SendRetransmitRequest()
-            self.Align()
-            self.SendRetransmitRequest()
-            return self.ReadPacket()
-
-        #print(unpacked_data)
-        #print(".....")
-        ret = CoffeePacket(unpacked_data[1], unpacked_data[2], unpacked_data[3], 0)
         return ret
+
+    def RealignProcedure(self):
+        print("ERROR: Reframing Packet!")
+        self.SendRetransmitRequest()
+        self.Align()
+        self.SendRetransmitRequest()
+        return self.ReadPacket()
 
     #https://docs.micropython.org/en/latest/library/struct.html
     def Align(self):
