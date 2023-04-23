@@ -352,7 +352,7 @@ try:
                 pressurePid.setpoint = 1
         
             if mode == 1: #Pull Shot                                
-                pressurePid.setpoint = 9
+                pressurePid.setpoint = 10
                 
             if mode == 2: #Steam              
                 pressurePid.setpoint = 0
