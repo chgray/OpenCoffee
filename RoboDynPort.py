@@ -16,7 +16,13 @@ import time
 from machine import ADC
 
 
-
+class DimmerModes():
+    NORMAL_MODE = 1
+    TOGGLE_MODE = 2
+    
+class DimmerState():
+    ON = 1
+    OFF = 2
 
 # https://stackoverflow.com/questions/55744324/ac-dimmer-using-micropython
 # https://forums.raspberrypi.com/viewtopic.php?t=314801
@@ -33,47 +39,56 @@ class Dimmer:
         self.dimZCPin = zc_dimmer_pin
         self.dimCounter = 0
         self.zeroCross = 0
-        self.dimMode = NORMAL_MODE
+        self.dimMode = DimmerModes.NORMAL_MODE
         self.togMin = 0
         self.togMax = 1
-        self.user_dimmer_pin = Pin(user_dimmer_pin, Pin.OUT)
-        
+        self.pulseWidth = 1
+        self.toggleCounter = 0
+        self.toggleReload = 25
+        self._timer  = Timer()
+        self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
+        self._zc     = Pin(zc_dimmer_pin,  Pin.IN)
+
         
     def begin(self, dimmer_mode, on_off):
         self.dimMode = dimmer_mode
-        self.dimState = on_off
-        self.timer_init()
-        self.ext_int_init()
+        self.dimState = on_off       
+        self._zc.irq(trigger = Pin.IRQ_RISING, handler = self.onZC_ISR)
+        self._timer.init(freq = 10000, mode = Timer.PERIODIC, callback = self.onTimerISR)
         
     def setPower(self, power):
+        print("Power: %d" % power)
         if (power >= 99):
             power = 99
             
         self.dimPower = power
-        self.dimPulseBegin = powerBuf[power]        
+        self.dimPulseBegin = self.powerBuf(power)       
         #delay(1);
     
     def getPower(self):
-        if self.dimState == ON:
+        if self.dimState == DimmerState.ON:
             return self.dimPower
         else:
             return 0
         
-    def setState(self ON_OFF):    
-        self.dimState = ON_OFF    
+    def setState(self, state):    
+        self.dimState = state    
     
     def getState(self):        
-        if self.dimState == ON: 
+        if self.dimState == DimmerState.ON: 
             ret = True
         else:
             ret = False
         return ret
     
     def changeState(self):
-        if self.dimState == ON:
-            self.dimState = OFF
+        if self.dimState == DimmerState.ON:
+            self.dimState = DimmerState.OFF
         else:
-            self.dimState = ON
+            self.dimState = DimmerState.ON
+            
+    def powerBuf(self, value):
+        return 100 - value
             
     def toggleSettings(self, minValue, maxValue):
         if maxValue > 99:
@@ -81,9 +96,9 @@ class Dimmer:
         if minValue < 1:        
             minValue = 1
             
-        self.dimMode = TOGGLE_MODE
-        self.togMin = powerBuf[maxValue]
-        self.togMax = powerBuf[minValue]
+        self.dimMode = DimmerModes.TOGGLE_MODE
+        self.togMin = self.powerBuf(maxValue)
+        self.togMax = self.powerBuf(minValue)
         self.toggleReload = 50
 
     def getMode(self):
@@ -92,15 +107,17 @@ class Dimmer:
     def setMode(self, DIMMER_MODE):
         self.dimMode = DIMMER_MODE
     
-    def isr_ext(self, pin):
-        if self.dimState == ON:
+    def onZC_ISR(self, pin):
+        if self.dimState == DimmerState.ON:
             self.zeroCross = 1    
     
     def onTimerISR(self, _timer):  
         if self.zeroCross != 1:
-            return
+            return        
         
-        if self.dimMode == TOGGLE_MODE:
+        self.dimCounter += 1
+        
+        if self.dimMode == DimmerModes.TOGGLE_MODE:
             #*****
             #* TOGGLE DIMMING MODE
             #*****/
@@ -117,23 +134,26 @@ class Dimmer:
                     self.dimPulseBegin+=1
                 else:
                     self.dimPulseBegin-=1
-            
-        
-
+                   
+  
         #*****
         #* DEFAULT DIMMING MODE (NOT TOGGLE)
         #*****/
         if self.dimCounter >= self.dimPulseBegin:
-            digitalWrite(dimOutPin[k], HIGH);	
+            #print("High")
+            self.dimmerGPIO.value(1)
+            #digitalWrite(dimOutPin[k], HIGH);	
 
-        if self.dimCounter >= self.dimPulseBegin + self.pulseWidth:        
-            digitalWrite(dimOutPin[k], LOW);
+        if self.dimCounter >= self.dimPulseBegin + self.pulseWidth:    
+            #print("Low")    
+            self.dimmerGPIO.value(0)
+            #digitalWrite(dimOutPin[k], LOW);
             self.zeroCross = 0
             self.dimCounter = 0
         
        
-        if toggleCounter >= toggleReload:
-            toggleCounter = 1
+        if self.toggleCounter >= self.toggleReload:
+            self.toggleCounter = 1
         #timer1_write(timeoutPin);	
 	    
     
@@ -148,12 +168,17 @@ try:
 
     #from dimmer import Dimmer
     dimmer = Dimmer(11, 10)
-        
+    dimmer.begin(DimmerModes.NORMAL_MODE, DimmerState.ON)
+    power = 100
     while True:
-        # dimmer.value += 0.1
+        if power > 100:
+            power = 0 
+            
+        dimmer.setPower(power)
+        #power += 5
         # if dimmer.value >= 1:
         #    dimmer.value = 0
-        sleep(2)
+        sleep(1)
 
 
 except KeyboardInterrupt:
