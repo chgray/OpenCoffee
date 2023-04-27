@@ -63,7 +63,6 @@ class Dimmer:
         self.dimPower = power
         self.dimPulseBegin = self.powerBuf(power)       
         print("PulseBegin: %d" % self.dimPulseBegin)
-        #delay(1);
     
     def getPower(self):
         if self.dimState == DimmerState.ON:
@@ -140,22 +139,15 @@ class Dimmer:
         #* DEFAULT DIMMING MODE (NOT TOGGLE)
         #*****/
         if self.dimCounter >= self.dimPulseBegin:
-            #print("High")
             self.dimmerGPIO.value(1)
-            #digitalWrite(dimOutPin[k], HIGH);	
 
         if self.dimCounter >= self.dimPulseBegin + self.pulseWidth:    
-            #print("Low")    
             self.dimmerGPIO.value(0)
-            #digitalWrite(dimOutPin[k], LOW);
             self.zeroCross = 0
-            self.dimCounter = 0
-        
+            self.dimCounter = 0        
        
         if self.toggleCounter >= self.toggleReload:
-            self.toggleCounter = 1
-        #timer1_write(timeoutPin);	
-	    
+            self.toggleCounter = 1	    
     
     print ("Hello")
 
