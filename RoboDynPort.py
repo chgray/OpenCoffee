@@ -46,14 +46,14 @@ class Dimmer:
         self.toggleCounter = 0
         self.toggleReload = 25
         self._timer  = Timer()
-        self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
+        #self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
         self._zc     = Pin(zc_dimmer_pin,  Pin.IN)
         
     def begin(self, dimmer_mode, on_off):
         self.dimMode = dimmer_mode
         self.dimState = on_off       
         self._zc.irq(trigger = Pin.IRQ_RISING, handler = self.onZC_ISR)
-        self._timer.init(freq = 5000, mode = Timer.PERIODIC, callback = self.onTimerISR)
+        #self._timer.init(freq = 5000, mode = Timer.PERIODIC, callback = self.onTimerISR)
         
     def setPower(self, power):        
         if (power >= 99):
