@@ -42,27 +42,27 @@ class Dimmer:
         self.dimMode = DimmerModes.NORMAL_MODE
         self.togMin = 0
         self.togMax = 1
-        self.pulseWidth = 1
+        self.pulseWidth = 3
         self.toggleCounter = 0
         self.toggleReload = 25
         self._timer  = Timer()
         self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
         self._zc     = Pin(zc_dimmer_pin,  Pin.IN)
-
         
     def begin(self, dimmer_mode, on_off):
         self.dimMode = dimmer_mode
         self.dimState = on_off       
         self._zc.irq(trigger = Pin.IRQ_RISING, handler = self.onZC_ISR)
-        self._timer.init(freq = 10000, mode = Timer.PERIODIC, callback = self.onTimerISR)
+        self._timer.init(freq = 5000, mode = Timer.PERIODIC, callback = self.onTimerISR)
         
-    def setPower(self, power):
-        print("Power: %d" % power)
+    def setPower(self, power):        
         if (power >= 99):
             power = 99
-            
+        print("Power: %d" % power)
+        
         self.dimPower = power
         self.dimPulseBegin = self.powerBuf(power)       
+        print("PulseBegin: %d" % self.dimPulseBegin)
         #delay(1);
     
     def getPower(self):
@@ -88,7 +88,7 @@ class Dimmer:
             self.dimState = DimmerState.ON
             
     def powerBuf(self, value):
-        return 100 - value
+        return (100 - value)# + 1
             
     def toggleSettings(self, minValue, maxValue):
         if maxValue > 99:
@@ -165,18 +165,17 @@ class Dimmer:
 #     sleep(0.0001)
 
 try:
-
     #from dimmer import Dimmer
     dimmer = Dimmer(11, 10)
     dimmer.begin(DimmerModes.NORMAL_MODE, DimmerState.ON)
     power = 100
     while True:
         if power > 100:
-            power = 0 
+            power = 85
             
         dimmer.setPower(power)
-        #power += 5
-        # if dimmer.value >= 1:
+        #power += 2
+        #if dimmer.value >= 1:
         #    dimmer.value = 0
         sleep(1)
 
@@ -185,5 +184,13 @@ except KeyboardInterrupt:
     h = Pin(11, Pin.OUT)
     h.value(0)
     print("Debugger Stopped..")
+
+    
+except Exception as e:
+    h = Pin(11, Pin.OUT)
+    h.value(0)
+    print("Debugger Stopped..")
+
+
 
 print ("Goodbye!")
