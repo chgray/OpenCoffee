@@ -24,24 +24,11 @@ class Dimmer:
     def __init__(self, user_dimmer_pin, zc_dimmer_pin):
         print("Dimmer PIN : %d" % user_dimmer_pin)
         print("ZC PIN : %d" % zc_dimmer_pin)
-        self.toggle_state = False
-              
-        self.dimOutPin = user_dimmer_pin
-        self.dimZCPin = zc_dimmer_pin
-        self.dimCounter = 0
-        self.zeroCross = 0
-     
-        self.togMin = 0
-        self.togMax = 1
-        self.pulseWidth = 3
-        self.toggleCounter = 0
-        self.toggleReload = 25
-        self._timer  = Timer()
-                
+                        
         self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
-        self._zc     = Pin(zc_dimmer_pin,  Pin.IN)
+        self._zc = Pin(zc_dimmer_pin,  Pin.IN)
         self.dimmerGPIO.value(0)
-        
+        self.dimmerCycles = 12  # <-- one second
         
     def begin(self):
         self.setPower(0)
@@ -52,36 +39,49 @@ class Dimmer:
             power = 99
         print("Power: %d" % power)
         
-        self.dimPower = power        
+        self.dimPower = power
+        
+        self.onCycles = (power / 100) * self.dimmerCycles
+        self.offCycles = self.dimmerCycles - self.onCycles
+        print("Cycles: %d/%d" % (self.onCycles, self.offCycles))
+        
+        self.on = True
+        self.nextEvaluation = self.onCycles        
+          
     
     def getPower(self):
         return self.dimPower
        
     def onZC_ISR(self, pin):
-        self.zeroCross = 1    
+        self.nextEvaluation -= 1
+        if 0 == self.nextEvaluation:
+            if self.on:
+                print("On!")
+                self.on = False
+                self.nextEvaluation = self.offCycles
+                self.dimmerGPIO.value(0)
+            else:
+                print("Off!")
+                self.on = True
+                self.nextEvaluation = self.onCycles
+                self.dimmerGPIO.value(1)
     
-   
-    
-    print ("Hello")
 
 # h = Pin(11, Pin.OUT)
 # while True:
 #     h.toggle()
-#     sleep(0.0001)
-
+#     print("Flip")
+#     sleep(1)
+    
 try:
     #from dimmer import Dimmer
     dimmer = Dimmer(11, 10)
     dimmer.begin()
-    power = 25
+    dimmer.setPower(25)
+    power = 0
     while True:
         if power > 100:
             power = 85
-            
-        #dimmer.setPower(power)
-        #power += 2
-        #if dimmer.value >= 1:
-        #    dimmer.value = 0
         sleep(1)
 
 
@@ -96,7 +96,6 @@ except Exception as e:
     h.value(0)
     print("Debugger Stopped : general exception...")
     print(e)
-
 
 
 print ("Goodbye!")
