@@ -28,74 +28,84 @@ class Dimmer:
         self.dimmerGPIO = Pin(user_dimmer_pin, Pin.OUT)
         self._zc = Pin(zc_dimmer_pin,  Pin.IN)
         self.dimmerGPIO.value(0)
-        self.dimmerCycles = 12  # <-- one second
+        self.dimmerCycles = 120  # <-- one second
+        self.dimPower = 0
+        self.nextEvaluation = 1
+        self.powerSettingsChanged = True
+        self.updatePower()
         
     def begin(self):
         self.setPower(0)
         self._zc.irq(trigger = Pin.IRQ_RISING, handler = self.onZC_ISR)        
         
-    def setPower(self, power):        
-        if (power >= 99):
-            power = 99
-        print("Power: %d" % power)
+    def setPower(self, power):         
+        if power == self.dimPower:
+            return
         
+        if power < 0:
+            power = 0
+        if power > 100:
+            power = 100
+              
+        print("Power: %d" % power)        
         self.dimPower = power
+        self.powerSettingsChanged = True
         
-        self.onCycles = (power / 100) * self.dimmerCycles
+        
+    def updatePower(self):                
+        self.onCycles = (self.dimPower / 100) * self.dimmerCycles
         self.offCycles = self.dimmerCycles - self.onCycles
-        print("Cycles: %d/%d" % (self.onCycles, self.offCycles))
+        print("UPDATE_POWER - Cycles: %d/%d" % (self.onCycles, self.offCycles))
         
-        self.on = True
-        self.nextEvaluation = self.onCycles        
-          
+        self.remainingOn = self.onCycles
+        self.remainingOff = self.offCycles
+                
+        self.powerSettingsChanged = False    
+        
     
     def getPower(self):
         return self.dimPower
        
     def onZC_ISR(self, pin):
-        self.nextEvaluation -= 1
-        if 0 == self.nextEvaluation:
-            if self.on:
-                print("On!")
-                self.on = False
-                self.nextEvaluation = self.offCycles
-                self.dimmerGPIO.value(0)
-            else:
-                print("Off!")
-                self.on = True
-                self.nextEvaluation = self.onCycles
-                self.dimmerGPIO.value(1)
+        
+        if self.powerSettingsChanged:
+            self.updatePower()
+            
+        if self.remainingOn > 0:  
+            self.remainingOn = self.remainingOn - 1              
+            self.dimmerGPIO.value(1)
+            
+        elif self.remainingOff > 0:
+            self.dimmerGPIO.value(0)                
+            self.remainingOff = self.remainingOff - 1                    
+            
+        #print("%d %d" %(self.remainingOff, self.remainingOn))
+        
+        if 0 == self.remainingOff and 0 == self.remainingOn:
+            self.remainingOn = self.onCycles
+            self.remainingOff = self.offCycles
+            print("reset")
     
 
-# h = Pin(11, Pin.OUT)
-# while True:
-#     h.toggle()
-#     print("Flip")
-#     sleep(1)
     
-try:
-    #from dimmer import Dimmer
-    dimmer = Dimmer(11, 10)
-    dimmer.begin()
-    dimmer.setPower(25)
-    power = 0
-    while True:
-        if power > 100:
-            power = 85
-        sleep(1)
+# try:
+#     #from dimmer import Dimmer
+#     dimmer = Dimmer(11, 10)
+#     dimmer.begin()
+#     dimmer.setPower(0)
+#     power = 0
+    
+#     dimmer_percent = 0
+#     while True:
+#         dimmer.setPower(dimmer_percent) 
+#         dimmer_percent = dimmer_percent + 5
+#         print("Dimmer : %d" % dimmer_percent)
+#         sleep(3)
+     
 
-
-except KeyboardInterrupt:
-    h = Pin(11, Pin.OUT)
-    h.value(0)
-    print("Debugger Stopped..")
+# except KeyboardInterrupt:
+#     h = Pin(11, Pin.OUT)
+#     h.value(0)
+#     print("Debugger Stopped..")
 
     
-except Exception as e:
-    h = Pin(11, Pin.OUT)
-    h.value(0)
-    print("Debugger Stopped : general exception...")
-    print(e)
-
-
-print ("Goodbye!")

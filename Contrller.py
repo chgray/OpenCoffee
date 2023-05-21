@@ -4,6 +4,7 @@ import machine, onewire, ds18x20, os
 from lcd1602 import *
 from Max6675 import *
 from PID_lib import *
+from RoboDynSimple import *
 from machine import UART
 
 from time import sleep
@@ -31,7 +32,6 @@ global lcd
 g_MaxTemp = 130
 
 groupheadSolenoid = cs = machine.Pin(13, Pin.OUT)
-
 
 pressure_sda = machine.Pin(20)#, machine.Pin.OUT)
 pressure_scl = machine.Pin(21)#, machine.Pin.OUT)
@@ -61,19 +61,25 @@ print("123_Running.")
 
 dimmer_percent = 0
 def SetMotorPercent(percent):    
-    global dimmer_percent          
-    v = (int)((percent / 100) * 65536)       
-    dimmer.duty_u16(v) # duty cycle 50% of 16 bit number
+    global dimmer_percent  
+    global dimmer        
+    #v = (int)((percent / 100) * 65536)         
+    dimmer.setPower(percent) # duty cycle 50% of 16 bit number
     dimmer_percent = percent
-    
 
-dimmer = PWM(Pin(18))
-dimmer.freq(60) #1000000)
+
+dimmer = Dimmer(11, 10)
+dimmer.begin()
+dimmer.setPower(100)
+
+#dimmer = PWM(Pin(18))
+#dimmer.freq(60) #1000000)
 
 #https://www.amazon.com/gp/product/B06Y1DT1WP/ref=ppx_yo_dt_b_asin_title_o02_s00?ie=UTF8&psc=1
 #50Hz or 60Hz PWM input signal up to 10kHz Input voltage level up to VCC (0-3.3V / 0-5V) 50HZ LED
-dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
+#dimmer.duty_u16(0) # duty cycle 50% of 16 bit number
 SetMotorPercent(0)
+
 
 heater = Pin(26, Pin.OUT)
 button = Pin(0, Pin.IN, Pin.PULL_DOWN)
@@ -83,6 +89,9 @@ uart.write("heater and buttons setup")
 count = 0
 temp=150
 heating=1
+
+
+
 
 def fileExists(path):
     try:
@@ -158,7 +167,6 @@ def LoadConfigFile():
         d = 1
         goalTemp = 104.4
 
-
 so = Pin(17, Pin.IN)
 sck = Pin(15, Pin.OUT)
 cs = Pin(16, Pin.OUT)
@@ -212,7 +220,7 @@ pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
 print("PID setup!")  
 
-pressurePid = PID(250, 0, 0, setpoint=9, scale='ms')
+pressurePid = PID(0.5, 0, 0, setpoint=9, scale='ms')
 pressurePid.output_limits = (60, 100)    # Output value will be between 0 and 10
 pressurePid.set_auto_mode(True, last_output=0)
 print("Pressure PID setup!")   
@@ -263,6 +271,15 @@ def toggle_heater(timer):
             
 timer.init(freq=100, mode=Timer.PERIODIC, callback=toggle_heater)
 print("Heater Toggle timer setup!")
+
+
+dimmer_percent = 0
+while True:
+     SetMotorPercent(dimmer_percent) 
+    #dimmer_percent = dimmer_percent + 5
+     print("Dimmer : %d" % dimmer_percent)
+     sleep(2)
+     
         
 try:
     nextPrintTime = 0
@@ -273,7 +290,8 @@ try:
     
     while True :        
         # f.flush()  
-        t = time.ticks_ms() 
+        t = time.ticks_ms()
+        #mode = 0
        
         if t_resetTempTime!=0 and t > t_resetTempTime:
             print("Reset Temperature")
@@ -282,10 +300,10 @@ try:
          
         pressure = convertPressure(pressureSensor.read(0))
                 
-        if 0 == button.value():
-            print ("Button Down!! in mode %d" % (mode))
+        if 0 == button.value() or True:
+            #print ("Button Down!! in mode %d" % (mode))
             dimmer_percent = pressurePid(pressure)
-            print("Pressure: %f,   Dimmer: %d, Goal: %d" % (pressure, dimmer_percent, pressurePid.setpoint))
+            print("Pressure: %f,   Dimmer: %d, Goal: %d, Pump: %d" % (pressure, dimmer_percent, pressurePid.setpoint, dimmer_percent))
             SetMotorPercent(dimmer_percent) 
             
             if mode == 0 or mode == 1:
@@ -352,7 +370,7 @@ try:
                 pressurePid.setpoint = 1
         
             if mode == 1: #Pull Shot                                
-                pressurePid.setpoint = 10
+                pressurePid.setpoint = 9
                 
             if mode == 2: #Steam              
                 pressurePid.setpoint = 0
