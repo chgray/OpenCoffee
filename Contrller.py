@@ -62,7 +62,12 @@ print("123_Running.")
 dimmer_percent = 0
 def SetMotorPercent(percent):    
     global dimmer_percent  
-    global dimmer        
+    global dimmer 
+    
+    percent = int(percent)
+    
+    if percent != 0:
+        print("SetMotor: %f" % percent)     
     #v = (int)((percent / 100) * 65536)         
     dimmer.setPower(percent) # duty cycle 50% of 16 bit number
     dimmer_percent = percent
@@ -213,15 +218,17 @@ f.write("Time, Time, Temp, Control, Control, P, I, D\r\n")
 LoadConfigFile()
 
 
-
 print("P=%f, I=%f, D=%f,  goalTemp=%f" % (p,i,d,goalTemp))
 pid = PID(p,i, d, setpoint=goalTemp, scale='ms')
 pid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pid.set_auto_mode(True, last_output=0)
 print("PID setup!")  
 
-pressurePid = PID(0.5, 0, 0, setpoint=9, scale='ms')
-pressurePid.output_limits = (60, 100)    # Output value will be between 0 and 10
+pressure_pid_p = 1
+pressure_pid_i = 0
+pressure_pid_d = 0
+pressurePid = PID(pressure_pid_p, pressure_pid_i, pressure_pid_d, setpoint=9, scale='ms')
+pressurePid.output_limits = (0, 1)    # Output value will be between 0 and 10
 pressurePid.set_auto_mode(True, last_output=0)
 print("Pressure PID setup!")   
  
@@ -274,17 +281,20 @@ print("Heater Toggle timer setup!")
 
 
 dimmer_percent = 0
-while True:
-     SetMotorPercent(dimmer_percent) 
+#while True:
+     #SetMotorPercent(dimmer_percent) 
     #dimmer_percent = dimmer_percent + 5
-     print("Dimmer : %d" % dimmer_percent)
-     sleep(2)
+     #print("Dimmer : %d" % dimmer_percent)
+     #sleep(2)
      
         
 try:
     nextPrintTime = 0
     t_start = time.ticks_ms()
-    mode = 0
+    mode = -1
+    
+    t_totalTimePressed = 0
+    t_buttonDownTime = 0
     
     t_resetTempTime = 0
     
@@ -300,9 +310,13 @@ try:
          
         pressure = convertPressure(pressureSensor.read(0))
                 
-        if 0 == button.value() or True:
-            #print ("Button Down!! in mode %d" % (mode))
-            dimmer_percent = pressurePid(pressure)
+        if 0 == button.value(): # or True:
+            
+            if 0 == t_buttonDownTime:                
+                t_buttonDownTime = time.ticks_ms()
+            
+            dimmer_percent = pressurePid(pressure) * 100
+            print("DP: %f" % dimmer_percent)
             print("Pressure: %f,   Dimmer: %d, Goal: %d, Pump: %d" % (pressure, dimmer_percent, pressurePid.setpoint, dimmer_percent))
             SetMotorPercent(dimmer_percent) 
             
@@ -314,6 +328,12 @@ try:
             else:
                 groupheadSolenoid.value(0)               
         else:
+            # keep tally on how long the button was held
+            if 0 != t_buttonDownTime:
+                delta = time.ticks_ms() - t_buttonDownTime
+                t_totalTimePressed = t_totalTimePressed + delta
+                t_buttonDownTime = 0
+            
             SetMotorPercent(0)
             groupheadSolenoid.value(0)               
             
@@ -364,6 +384,12 @@ try:
         if mode != rotary.value():
             mode = rotary.value()
             print("MODE: %d" % (mode))
+            
+            # When the mode changes, reset the timer
+            t_totalTimePressed = 0
+            
+            # Force update of the screen (to improve responsivness)
+            lcdDisplay = True
         
             # Preinfuse
             if mode == 0:  #PreInfuse                         
@@ -461,10 +487,10 @@ try:
         # 
         if (time.ticks_ms() > nextPrintTime) or display:            
             lcdDisplay = True
-            nextPrintTime = time.ticks_ms() + 250
+            nextPrintTime = time.ticks_ms() + 1500
             #print("Val,  %d, %d, D:%d, P:%f, %f, %f, %f, %f, %f    " % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))          
             #f.write("%d, %d, %d, %f, %f, %f, %f, %f\r\n" % (t - t_start, t, goalTemp, temp, control, p, i, d))            
-            msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d))
+            msg = ("STAT,%d, %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %f\r\n" % (((t - t_start)/100)*10, goalTemp, dimmer_percent, pressure, temp, control, p, i, d, pressure_pid_p, pressure_pid_i, pressure_pid_d))
             uart.write(msg.encode('utf-8'))
                 
         if updatePID:
@@ -519,19 +545,24 @@ try:
             lcd_clear()    
             gt = (float)(goalTemp)
             
+            if 0 != t_buttonDownTime:
+                duration = t_totalTimePressed + (time.ticks_ms() - t_buttonDownTime)            
+            else:
+                duration = -1
+            
             if 0 == mode:
                 lcd_write(0, 0, ('Pre%d/%d(C)' % (temp, gt)))
-                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
+                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), (duration/1000)))) 
             if 1 == mode:                
                 lcd_write(0, 0, ('Pull%d/%d(C)' % (temp, gt)))
-                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
+                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), (duration/1000)))) 
             if 2 == mode:
                 lcd_write(0, 0, ('NOT-IMPL Steam %d/%d(C)' % (temp, gt)))
-                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
+                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), (duration/1000)))) 
             if 3 == mode:
                 left = t_resetTempTime - time.ticks_ms()
                 lcd_write(0, 0, ('Water: %d/%d(C) - %d' % (temp, gt, left)))
-                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), pressurePid.setpoint))) 
+                lcd_write(0, 1, ("%s/%d" % (Dec2(pressure), (duration/1000)))) 
                 
         if updateConfig:
             with open("PID.config", 'w') as save:

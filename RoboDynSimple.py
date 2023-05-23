@@ -46,8 +46,10 @@ class Dimmer:
             power = 0
         if power > 100:
             power = 100
-              
-        print("Power: %d" % power)        
+             
+        if power > 0: 
+            print("Power: %d" % power)        
+            
         self.dimPower = power
         self.powerSettingsChanged = True
         
@@ -55,7 +57,7 @@ class Dimmer:
     def updatePower(self):                
         self.onCycles = (self.dimPower / 100) * self.dimmerCycles
         self.offCycles = self.dimmerCycles - self.onCycles
-        print("UPDATE_POWER - Cycles: %d/%d" % (self.onCycles, self.offCycles))
+        #print("UPDATE_POWER - Cycles: %d/%d" % (self.onCycles, self.offCycles))
         
         self.remainingOn = self.onCycles
         self.remainingOff = self.offCycles
@@ -84,7 +86,7 @@ class Dimmer:
         if 0 == self.remainingOff and 0 == self.remainingOn:
             self.remainingOn = self.onCycles
             self.remainingOff = self.offCycles
-            print("reset")
+            #print("reset")
     
 
     
