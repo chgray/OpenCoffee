@@ -67,7 +67,7 @@ def SetMotorPercent(percent):
     percent = int(percent)
     
     if percent != 0:
-        print("SetMotor: %f" % percent)     
+       print("SetMotor: %f" % percent)     
     #v = (int)((percent / 100) * 65536)         
     dimmer.setPower(percent) # duty cycle 50% of 16 bit number
     dimmer_percent = percent
@@ -323,7 +323,7 @@ try:
             if mode == 0 or mode == 1:
                 groupheadSolenoid.value(1)
             elif mode == 3:
-                goalTemp = 115
+                #goalTemp = 115
                 t_resetTempTime = time.ticks_ms() + (2*60*1000)
             else:
                 groupheadSolenoid.value(0)               
