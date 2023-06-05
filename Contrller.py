@@ -22,6 +22,8 @@ global lcd
 # https://microcontrollerslab.com/ds18b20-raspberry-pi-pico-micropython-tutorial/
 #https://github.com/miketeachman/micropython-rotary
 
+# Spec for ADS1015 - https://datasheet.lcsc.com/lcsc/1808311141_Texas-Instruments-ADS1015IDGSR_C193969.pdf
+
 #pressureADC = ADC(28)
 #while True:
 #        v = pressure.read_u16()
