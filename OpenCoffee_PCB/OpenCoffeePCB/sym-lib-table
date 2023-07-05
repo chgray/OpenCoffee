@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "OpenCoffeeParts")(type "KiCad")(uri "C:/Source/opencoffee/OpenCoffee_PCB/OpenCoffeePCB/OpenCoffeeParts.kicad_sym")(options "")(descr ""))
+)
