@@ -1,3 +1,5 @@
 (fp_lib_table
+  (version 7)
   (lib (name "OpenCoffeePartsFootprint")(type "KiCad")(uri "C:/Source/opencoffee/OpenCoffee_PCB/OpenCoffeePCB/OpenCoffeePartsFootprint.pretty")(options "")(descr ""))
+  (lib (name "RP2040_minimal")(type "KiCad")(uri "${KIPRJMOD}/RP2040_minimal.pretty")(options "")(descr ""))
 )
