@@ -1,3 +1,5 @@
 (sym_lib_table
+  (version 7)
   (lib (name "OpenCoffeeParts")(type "KiCad")(uri "C:/Source/opencoffee/OpenCoffee_PCB/OpenCoffeePCB/OpenCoffeeParts.kicad_sym")(options "")(descr ""))
+  (lib (name "RP2040_minimal-rescue")(type "KiCad")(uri "${KIPRJMOD}/RP2040_minimal-rescue.kicad_sym")(options "")(descr ""))
 )
