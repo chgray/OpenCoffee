@@ -393,10 +393,10 @@ try:
         
             # Preinfuse
             if mode == 0:  #PreInfuse                         
-                pressurePid.setpoint = 1
+                pressurePid.setpoint = 2
         
             if mode == 1: #Pull Shot                                
-                pressurePid.setpoint = 9
+                pressurePid.setpoint = 11
                 
             if mode == 2: #Steam              
                 pressurePid.setpoint = 0
