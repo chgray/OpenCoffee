@@ -63,6 +63,23 @@ oled.blit(fb, 96, 0)
 
 # Basic stuff
 oled.text("Raspberry Pi",5,5)
+
+
+led = machine.Pin("LED", machine.Pin.OUT)
+led.off()
+led.on()
+
+i = 0
+while True:
+    led.toggle()
+    msg = "Hello {0}".format(i)
+    oled.fill(0) # Black
+    oled.text(msg, 0, 0)
+    #sleep(1)
+    i = i + 1
+    oled.show()
+
+
 oled.text("Pico",5,15)
 oled.pixel(10,60,1)
 oled.rect(5,32,20,10,1)
@@ -295,12 +312,3 @@ blk()
 
 
 
-
-
-led = machine.Pin("LED", machine.Pin.OUT)
-led.off()
-led.on()
-
-while True:
-    led.toggle()
-    sleep(1)
